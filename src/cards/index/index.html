@@ -1,0 +1,13 @@
+<!-- src/cards/index/index.html -->
+<div class="card index-card"
+     x-data="index"
+     x-init="await init($kv, $userId)"
+     hx-swap-oob="true">
+  <div class="index-content">
+    <h1 x-text="message"></h1>
+    <input type="text" 
+           x-model="message" 
+           @change="await updateMessage($event.target.value)"
+           placeholder="Update message">
+  </div>
+</div>

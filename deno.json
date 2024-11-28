@@ -1,0 +1,13 @@
+{
+  "tasks": {
+    "dev": "deno run -A --watch main.ts",
+    "build": "deno run -A npm:vite build",
+    "serve": "deno run -A main.ts"
+  },
+  "imports": {
+    "hono": "npm:hono@3",
+    "hono/": "npm:/hono@3/",
+    "vite": "npm:vite@5",
+    "vite/": "npm:/vite@5/"
+  }
+}

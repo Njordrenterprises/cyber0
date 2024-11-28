@@ -1,0 +1,60 @@
+.card {
+  background: var(--card-bg, #ffffff);
+  border-radius: var(--card-radius, 12px);
+  box-shadow: var(--card-shadow, 0 2px 8px rgba(0, 0, 0, 0.1));
+  padding: var(--card-padding, 1.5rem);
+  margin: var(--card-margin, 1rem);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card:hover {
+  box-shadow: var(--card-shadow-hover, 0 4px 12px rgba(0, 0, 0, 0.15));
+  transform: translateY(-2px);
+}
+
+.card-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-content-gap, 1rem);
+}
+
+.card input[type="text"],
+.card input[type="number"],
+.card textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--input-border, #e2e8f0);
+  border-radius: var(--input-radius, 6px);
+  background: var(--input-bg, #f8fafc);
+  transition: all 0.2s ease;
+}
+
+.card input[type="text"]:focus,
+.card input[type="number"]:focus,
+.card textarea:focus {
+  outline: none;
+  border-color: var(--input-focus-border, #3b82f6);
+  box-shadow: 0 0 0 2px var(--input-focus-shadow, rgba(59, 130, 246, 0.1));
+}
+
+.card-loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.card-error {
+  border: 1px solid var(--error-border, #ef4444);
+  background: var(--error-bg, #fee2e2);
+  color: var(--error-text, #b91c1c);
+  padding: 0.75rem;
+  border-radius: var(--error-radius, 6px);
+  margin-top: 0.5rem;
+}
+
+/* Animation for HTMX swaps */
+.card.htmx-swapping {
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}

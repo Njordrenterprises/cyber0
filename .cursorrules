@@ -1,0 +1,107 @@
+# Card-Based Architecture System Rules
+
+## Directory Structure
+```plaintext
+/src
+├── cards/                    # Card modules directory
+│   ├── types.ts             # Shared type definitions
+│   └── [card-name]/         # Individual card directories
+│       ├── [card-name].ts   # Card's Alpine.js module + KV logic
+│       ├── [card-name].css  # Card-specific styles
+│       └── [card-name].html # Card template
+├── main.css                 # Shell styles
+└── index.html              # Main application shell
+```
+
+## Card Module Requirements
+
+### 1. TypeScript Module
+Each `[card-name].ts` must export a default object with:
+
+* `id: string` - Unique identifier
+* `kv: Deno.Kv | null` - KV store reference
+* `init(kv: Deno.Kv): Promise<unknown>` - Initialization method
+* `getState(): unknown` - State getter
+* Additional methods for card functionality
+
+### 2. HTML Template
+Each `[card-name].html` must include:
+
+* `class="card [card-name]-card"` - Card class naming
+* `x-data="[card-name]"` - Alpine.js binding
+* `x-init="await init($kv)"` - KV initialization
+* `hx-swap-oob="true"` - HTMX swap support
+
+### 3. CSS Module
+Each `[card-name].css` must use:
+
+* `.card.[card-name]-card` - Scoped class naming
+* CSS custom properties for theming
+* Responsive design patterns
+
+## State Management Rules
+
+### KV Operations
+1. Use structured keys: `['cards', cardId, 'property']`
+2. Handle KV initialization errors
+3. Implement atomic updates
+4. Cache state appropriately
+
+### Alpine.js Integration
+1. Export reactive data properties
+2. Implement x-init for setup
+3. Handle async operations
+4. Manage cleanup if needed
+
+### HTMX Integration
+1. Support partial updates
+2. Use appropriate swap strategies
+3. Handle loading states
+4. Manage error states
+
+## API Endpoints
+
+* State: `GET /api/cards/[card-name]/state`
+* Actions: `POST /api/cards/[card-name]/[action]`
+* Updates: `PUT /api/cards/[card-name]/[property]`
+* Templates: `GET /api/cards/[card-name]/template`
+
+## Security Requirements
+
+1. Validate all inputs
+2. Sanitize state data
+3. Implement CSRF protection
+4. Handle rate limiting
+5. Validate KV operations
+
+## AI Integration
+
+1. Expose typed interfaces
+2. Document state schema
+3. Provide action methods
+4. Handle validation
+5. Support async operations
+
+## Performance Guidelines
+
+1. Minimize DOM updates
+2. Optimize KV queries
+3. Implement proper caching
+4. Lazy load components
+5. Use efficient selectors
+
+## Error Handling
+
+1. Graceful degradation
+2. User feedback
+3. Error boundaries
+4. State recovery
+5. Logging
+
+## Testing Requirements
+
+1. Unit tests for card logic
+2. Integration tests for KV
+3. UI component tests
+4. API endpoint tests
+5. Performance benchmarks
