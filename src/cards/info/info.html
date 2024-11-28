@@ -1,12 +1,46 @@
-<!-- src/cards/index/index.html -->
+<!-- src/cards/info/info.html -->
 <div class="card info-card"
-     x-data="{ ...$data, ...window.cardData.info }"
-     x-init="await init(window.cardData.info.kv, window.cardData.info.userId)">
+     x-data="{ 
+       message: '',
+       inputValue: '',
+       cardIndex: $el.closest('.card-wrapper').dataset.index,
+       cardData: null,
+       async init() {
+         // Wait for card data to be initialized
+         while (!globalThis.cardData?.info) {
+           await new Promise(resolve => setTimeout(resolve, 100));
+         }
+         this.cardData = globalThis.cardData.info;
+         await this.loadMessage();
+       },
+       async submitMessage() {
+         if (!this.cardData?.handleKvUpdate) {
+           console.error('Card methods not initialized');
+           return;
+         }
+         await this.cardData.handleKvUpdate(parseInt(this.cardIndex), this.inputValue);
+         this.message = this.inputValue;
+         this.inputValue = '';
+       },
+       async loadMessage() {
+         if (!this.cardData?.loadCardMessage) {
+           console.error('Card methods not initialized');
+           return;
+         }
+         this.message = await this.cardData.loadCardMessage(parseInt(this.cardIndex));
+       }
+     }"
+     x-init="await init()">
   <div class="info-content">
-    <h1>Info Card #<span x-text="index + 1"></span></h1>
-    <input type="text" 
-           x-model="message" 
-           @change="await updateMessage($event.target.value)"
-           placeholder="Update message">
+    <h1>Info Card #<span x-text="parseInt(cardIndex) + 1"></span></h1>
+    <form @submit.prevent="submitMessage">
+      <input type="text" 
+             x-model="inputValue" 
+             placeholder="Enter a message">
+      <button type="submit" class="submit-btn">Submit</button>
+    </form>
+    <div class="message-display" x-show="message">
+      <p x-text="message"></p>
+    </div>
   </div>
 </div>

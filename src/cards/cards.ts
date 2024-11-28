@@ -7,7 +7,22 @@ export interface CardKvEntry {
   timestamp: number;
 }
 
-type CardKvKey = ['cards', string, string];
+type CardKvKey = ['cards', string, string, ...unknown[]];
+
+// Add type declaration for globalThis
+declare global {
+  interface GlobalThis {
+    cardData: {
+      [key: string]: {
+        kv: {
+          get: (key: unknown[]) => Promise<any>;
+          set: (key: unknown[], value: unknown) => Promise<void>;
+        };
+        userId: string;
+      };
+    };
+  }
+}
 
 export class Card<State extends CardState, KvEntry extends CardKvEntry> {
   id: string;
@@ -32,7 +47,7 @@ export class Card<State extends CardState, KvEntry extends CardKvEntry> {
     const kv = this.kv;
     if (!kv) return;
 
-    const watchKey: CardKvKey = ['cards', this.id, this.userId];
+    const watchKey = this.getKvKey();
     
     (async () => {
       try {
@@ -77,14 +92,29 @@ export class Card<State extends CardState, KvEntry extends CardKvEntry> {
     }
   }
 
+  protected getKvKey(): CardKvKey {
+    return ['cards', this.id, this.userId];
+  }
+
   protected async getKvEntry(): Promise<KvEntry | null> {
     if (!this.kv) return null;
-    const entry = await this.kv.get<KvEntry>(['cards', this.id, this.userId]);
+    const entry = await this.kv.get<KvEntry>(this.getKvKey());
     return entry.value;
   }
 
   protected async setKvEntry(entry: KvEntry): Promise<void> {
     if (!this.kv) return;
-    await this.kv.set(['cards', this.id, this.userId], entry);
+    await this.kv.set(this.getKvKey(), entry);
+  }
+
+  // Shared Alpine.js KV methods
+  protected async getAlpineKvEntry<T>(index: number): Promise<T | null> {
+    const key = ['cards', this.id, this.userId, index];
+    return await globalThis.cardData[this.id].kv.get(key);
+  }
+
+  protected async setAlpineKvEntry<T>(index: number, entry: T): Promise<void> {
+    const key = ['cards', this.id, this.userId, index];
+    await globalThis.cardData[this.id].kv.set(key, entry);
   }
 }

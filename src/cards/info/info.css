@@ -24,10 +24,19 @@
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.info-card form {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
 .info-card input {
+  flex: 1;
   background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
 }
 
 .info-card input::placeholder {
@@ -37,4 +46,36 @@
 .info-card input:focus {
   background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
+  outline: none;
+}
+
+.info-card .submit-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.info-card .submit-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.info-card .submit-btn:active {
+  transform: translateY(1px);
+}
+
+.info-card .message-display {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  border-radius: 4px;
+  margin-top: var(--spacing-md);
+}
+
+.info-card .message-display p {
+  margin: 0;
+  color: white;
+  word-break: break-word;
 }

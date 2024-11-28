@@ -12,7 +12,7 @@ export interface InfoKvEntry extends CardKvEntry {
 }
 
 class InfoCard extends Card<InfoState, InfoKvEntry> {
-  message: string = 'Info Card';
+  message: string = '';
   index: number = 0;
 
   protected override async loadInitialState(): Promise<void> {
@@ -39,6 +39,25 @@ class InfoCard extends Card<InfoState, InfoKvEntry> {
       message: this.message,
       index: this.index
     };
+  }
+
+  protected override getKvKey(): ['cards', string, string, number] {
+    return ['cards', this.id, this.userId, this.index];
+  }
+
+  // Alpine.js methods
+  async handleKvUpdate(index: number, newMessage: string) {
+    const entry: InfoKvEntry = {
+      message: newMessage,
+      index,
+      timestamp: Date.now()
+    };
+    await this.setAlpineKvEntry(index, entry);
+  }
+
+  async loadCardMessage(index: number): Promise<string> {
+    const entry = await this.getAlpineKvEntry<InfoKvEntry>(index);
+    return entry?.message || '';
   }
 }
 

@@ -3,11 +3,32 @@
 // Initialize KV store
 const kv = await Deno.openKv();
 
+// Initialize global card data
+declare global {
+  interface Window {
+    cardData: Record<string, any>;
+  }
+}
+
+globalThis.cardData = {};
+
 // Dynamic imports for cards and views
 async function loadCard(cardId: string) {
   try {
+    console.log(`Loading card: ${cardId}`);
     const module = await import(`./src/cards/${cardId}/${cardId}.ts`);
-    return module.default;
+    const card = module.default;
+    
+    // Initialize card data in global scope
+    console.log(`Initializing card data for: ${cardId}`);
+    globalThis.cardData = globalThis.cardData || {};
+    globalThis.cardData[cardId] = {
+      handleKvUpdate: card.handleKvUpdate.bind(card),
+      loadCardMessage: card.loadCardMessage.bind(card)
+    };
+    console.log(`Card data initialized: ${cardId}`, globalThis.cardData[cardId]);
+    
+    return card;
   } catch (error) {
     console.error(`Failed to load card: ${cardId}`, error);
     return null;
@@ -16,18 +37,46 @@ async function loadCard(cardId: string) {
 
 async function renderCard(card: any) {
   try {
+    // Load card data first
+    const cardModule = await loadCard(card.id);
+    if (!cardModule) {
+      throw new Error(`Failed to load card module: ${card.id}`);
+    }
+    
+    // Then render template
     const template = await Deno.readTextFile(`./src/cards/${card.id}/${card.id}.html`);
-    // Create a script tag to initialize Alpine.js data
+    
+    // Create a script to initialize card data in the browser
     const wrappedTemplate = `
       <script>
-        window.cardData = window.cardData || {};
-        window.cardData['${card.id}'] = {
-          kv: ${JSON.stringify(card.kv)},
-          userId: '${card.userId}'
+        // Initialize card data
+        globalThis.cardData = globalThis.cardData || {};
+        globalThis.cardData['${card.id}'] = {
+          handleKvUpdate: async (index, message) => {
+            const key = ['cards', '${card.id}', 'user', index];
+            const entry = { message, index, timestamp: Date.now() };
+            await fetch('/kv/set', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key, value: entry })
+            });
+          },
+          loadCardMessage: async (index) => {
+            const key = ['cards', '${card.id}', 'user', index];
+            const response = await fetch('/kv/get', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key })
+            });
+            const data = await response.json();
+            return data?.message || '';
+          }
         };
+        console.log('Card data initialized in browser:', '${card.id}', globalThis.cardData['${card.id}']);
       </script>
       ${template}
     `;
+    
     return wrappedTemplate;
   } catch (error) {
     console.error(`Failed to render card: ${card.id}`, error);
@@ -48,9 +97,32 @@ async function loadView(viewId: string) {
   }
 }
 
+// Add KV API endpoints
+async function handleKvGet(req: Request): Promise<Response> {
+  const { key } = await req.json();
+  const entry = await kv.get(key);
+  return new Response(JSON.stringify(entry.value), {
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+async function handleKvSet(req: Request): Promise<Response> {
+  const { key, value } = await req.json();
+  await kv.set(key, value);
+  return new Response('OK');
+}
+
 async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   console.log(`Request: ${url.pathname}`);
+
+  // Handle KV operations
+  if (url.pathname === '/kv/get' && req.method === 'POST') {
+    return handleKvGet(req);
+  }
+  if (url.pathname === '/kv/set' && req.method === 'POST') {
+    return handleKvSet(req);
+  }
 
   // Serve JS files
   if (url.pathname.startsWith("/src/js/")) {
