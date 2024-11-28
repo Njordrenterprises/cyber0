@@ -1,22 +1,12 @@
-import { defineConfig } from "npm:vite@5";
+import { defineConfig } from "npm:vite@5.0.12";
 
 export default defineConfig({
-  build: {
-    outDir: './dist',
-    emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        main: './src/client/main.ts',
-        styles: './src/client/styles/main.css'
-      }
-    }
-  },
   server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true
-      }
-    }
+    port: 5173,
+    strictPort: true
+  },
+  root: ".",
+  build: {
+    outDir: "./dist"
   }
-}) 
+}); 

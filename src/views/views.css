@@ -1,0 +1,88 @@
+/* Base view styles */
+.view {
+  width: 100vw;
+  height: 100vh;
+  padding: clamp(var(--spacing-xs), 2vw, var(--spacing-lg));
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* View header */
+.view h1 {
+  font-size: clamp(1.5rem, 4vw, 2.5rem);
+  margin-bottom: clamp(var(--spacing-sm), 2vh, var(--spacing-lg));
+}
+
+/* Container for cards within views */
+.cards-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: clamp(var(--spacing-xs), 2vw, var(--spacing-lg));
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(var(--spacing-sm), 2vw, var(--spacing-lg));
+  align-content: flex-start;
+}
+
+/* Card wrapper for flex sizing */
+.card-wrapper {
+  flex: 1 1 var(--card-base-width, 400px);
+  min-width: min(100%, var(--card-min-width, 300px));
+  max-width: 100%;
+  height: clamp(200px, 50vh, 600px);
+  display: flex;
+}
+
+/* Large Desktop (1440px and up) */
+@media (min-width: 1440px) {
+  .cards-container {
+    max-width: 1920px;
+    margin: 0 auto;
+  }
+
+  .card-wrapper {
+    flex-basis: calc(25% - var(--spacing-lg));
+  }
+}
+
+/* Desktop (1024px to 1439px) */
+@media (max-width: 1439px) and (min-width: 1024px) {
+  .card-wrapper {
+    flex-basis: calc(33.333% - var(--spacing-lg));
+  }
+}
+
+/* Tablet Landscape (768px to 1023px) */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .card-wrapper {
+    flex-basis: calc(50% - var(--spacing-md));
+    height: clamp(180px, 45vh, 500px);
+  }
+}
+
+/* Tablet Portrait (480px to 767px) */
+@media (max-width: 767px) and (min-width: 480px) {
+  .card-wrapper {
+    flex-basis: 100%;
+    height: clamp(150px, 40vh, 400px);
+  }
+}
+
+/* Mobile (479px and down) */
+@media (max-width: 479px) {
+  .view {
+    height: 100dvh; /* dynamic viewport height for mobile */
+  }
+
+  .card-wrapper {
+    flex-basis: 100%;
+    height: clamp(120px, 35vh, 300px);
+  }
+}
+

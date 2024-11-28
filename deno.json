@@ -1,13 +1,35 @@
 {
   "tasks": {
-    "dev": "deno run -A --watch main.ts",
-    "build": "deno run -A npm:vite build",
-    "serve": "deno run -A main.ts"
+    "dev": "deno run --allow-read --allow-write --allow-net --allow-env --allow-run --allow-sys --allow-ffi npm:vite",
+    "serve": "deno run --unstable-kv --watch --allow-net --allow-read --allow-env main.ts"
+  },
+  "compilerOptions": {
+    "lib": ["deno.ns", "deno.unstable", "dom", "dom.iterable", "dom.asynciterable"]
   },
   "imports": {
-    "hono": "npm:hono@3",
-    "hono/": "npm:/hono@3/",
-    "vite": "npm:vite@5",
-    "vite/": "npm:/vite@5/"
+    "vite": "npm:vite@5.0.12"
+  },
+  "fmt": {
+    "files": {
+      "include": ["src/"],
+      "exclude": ["src/js/"]
+    },
+    "options": {
+      "useTabs": false,
+      "lineWidth": 80,
+      "indentWidth": 2,
+      "singleQuote": false,
+      "proseWrap": "preserve"
+    }
+  },
+  "lint": {
+    "files": {
+      "include": ["src/"],
+      "exclude": ["src/js/"]
+    },
+    "rules": {
+      "tags": ["recommended"],
+      "exclude": ["no-explicit-any"]
+    }
   }
 }

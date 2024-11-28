@@ -1,0 +1,12 @@
+<!-- src/cards/index/index.html -->
+<div class="card info-card"
+     x-data="{ ...$data, ...window.cardData.info }"
+     x-init="await init(window.cardData.info.kv, window.cardData.info.userId)">
+  <div class="info-content">
+    <h1>Info Card #<span x-text="index + 1"></span></h1>
+    <input type="text" 
+           x-model="message" 
+           @change="await updateMessage($event.target.value)"
+           placeholder="Update message">
+  </div>
+</div>

@@ -1,0 +1,20 @@
+/* Home view specific styles */
+.home {
+  background: var(--bg-alt);
+}
+
+.home h1 {
+  font-family: var(--font-heading, inherit);
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+/* Enhance card container for home view */
+.home .cards-container {
+  max-width: var(--content-width-xl, 1440px);
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+}

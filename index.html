@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card System</title>
+    
+    <!-- Alpine.js -->
+    <script defer src="/src/js/alpine.min.js"></script>
+    
+    <!-- HTMX -->
+    <script src="/src/js/htmx.min.js"></script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/assets/main.css">
+    <link rel="stylesheet" href="/assets/views.css">
+    <link rel="stylesheet" href="/assets/cards/cards.css">
+    <link rel="stylesheet" href="/assets/cards/info/info.css">
+</head>
+<body>
+    <div id="app" hx-get="/views/home" hx-trigger="load" hx-swap="innerHTML"></div>
+</body>
+</html> 

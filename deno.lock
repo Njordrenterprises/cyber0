@@ -1,7 +1,6 @@
 {
   "version": "4",
   "specifiers": {
-    "npm:hono@3": "3.12.12",
     "npm:vite@5": "5.4.11"
   },
   "npm": {
@@ -162,9 +161,6 @@
     "fsevents@2.3.3": {
       "integrity": "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="
     },
-    "hono@3.12.12": {
-      "integrity": "sha512-5IAMJOXfpA5nT+K0MNjClchzz0IhBHs2Szl7WFAhrFOsbtQsYmNynFyJRg/a3IPsmCfxcrf8txUGiNShXpK5Rg=="
-    },
     "nanoid@3.3.8": {
       "integrity": "sha512-WNLf5Sd8oZxOm+TzppcYk8gVOgP+l58xNy58D0nbUnOxOWRWvlcCV4kUF7ltmI6PsrLl/BgKEyS4mqsGChFN0w=="
     },
@@ -217,10 +213,13 @@
       ]
     }
   },
+  "remote": {
+    "https://deno.land/std@0.217.0/async/delay.ts": "8e1d18fe8b28ff95885e2bc54eccec1713f57f756053576d8228e6ca110793ad",
+    "https://deno.land/std@0.217.0/http/server.ts": "6dce295abc169d0956ae00432441331b3425afad4d79e8b3475739be2f04d614"
+  },
   "workspace": {
     "dependencies": [
-      "npm:hono@3",
-      "npm:vite@5"
+      "npm:vite@5.0.12"
     ],
     "packageJson": {
       "dependencies": [

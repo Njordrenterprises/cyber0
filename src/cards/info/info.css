@@ -1,0 +1,40 @@
+/* src/cards/index/index.css */
+.index-card {
+  padding: 2rem;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  text-align: center;
+}
+
+.index-content h1 {
+  color: #333;
+  font-size: 2rem;
+  margin: 0;
+}
+
+/* Info card specific styles */
+.info-card {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: white;
+}
+
+.info-card h1 {
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.info-card input {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.info-card input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.info-card input:focus {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
