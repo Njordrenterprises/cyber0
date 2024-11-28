@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "dev": "deno run --allow-read --allow-write --allow-net --allow-env --allow-run --allow-sys --allow-ffi npm:vite",
+    "dev": "deno run --unstable-kv --allow-net --allow-read --allow-env main.ts & deno run --allow-read --allow-write --allow-net --allow-env --allow-run --allow-sys --allow-ffi npm:vite",
     "serve": "deno run --unstable-kv --watch --allow-net --allow-read --allow-env main.ts"
   },
   "compilerOptions": {
