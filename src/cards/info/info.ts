@@ -10,7 +10,12 @@ export interface InfoKvEntry extends CardKvEntry {
   index: number;
 }
 
-class InfoCard extends Card<InfoState, InfoKvEntry> {
+export interface InfoCardMethods {
+  handleKvUpdate(index: number, newMessage: string): Promise<void>;
+  loadCardMessage(index: number): Promise<string>;
+}
+
+class InfoCard extends Card<InfoState, InfoKvEntry> implements InfoCardMethods {
   message: string = '';
   index: number = 0;
 
@@ -45,7 +50,8 @@ class InfoCard extends Card<InfoState, InfoKvEntry> {
   }
 
   // Alpine.js methods
-  async handleKvUpdate(index: number, newMessage: string) {
+  public async handleKvUpdate(index: number, newMessage: string): Promise<void> {
+    console.log('Handling KV update:', index, newMessage);
     const entry: InfoKvEntry = {
       message: newMessage,
       index,
@@ -54,10 +60,21 @@ class InfoCard extends Card<InfoState, InfoKvEntry> {
     await this.setAlpineKvEntry(index, entry);
   }
 
-  async loadCardMessage(index: number): Promise<string> {
+  public async loadCardMessage(index: number): Promise<string> {
+    console.log('Loading card message:', index);
     const entry = await this.getAlpineKvEntry<InfoKvEntry>(index);
+    console.log('Loaded entry:', entry);
     return entry?.message || '';
+  }
+
+  // Method to expose Alpine.js methods
+  public getAlpineMethods(): InfoCardMethods {
+    return {
+      handleKvUpdate: this.handleKvUpdate.bind(this),
+      loadCardMessage: this.loadCardMessage.bind(this)
+    };
   }
 }
 
-export default new InfoCard('info'); 
+const infoCard = new InfoCard('info');
+export default infoCard; 

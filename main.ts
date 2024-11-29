@@ -1,22 +1,40 @@
 import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
+import infoCard from "./src/cards/info/info.ts";
 
 const kv = await Deno.openKv();
 
 // Initialize card data for client
-globalThis.cardData = {
-  info: {
-    kv: {
-      get: async (key: unknown[]) => {
-        const data = await kv.get(key);
-        return data.value;
-      },
-      set: async (key: unknown[], value: unknown) => {
-        await kv.set(key, value);
-      }
+if (!globalThis.cardData) {
+  globalThis.cardData = {};
+}
+
+// Initialize info card
+console.log('Initializing info card...');
+await infoCard.init(kv, 'test-user');
+
+// Get Alpine.js methods
+const alpineMethods = infoCard.getAlpineMethods();
+console.log('Alpine methods:', alpineMethods);
+
+// Initialize info card methods
+globalThis.cardData.info = {
+  kv: {
+    get: async (key: unknown[]) => {
+      console.log('Getting KV:', key);
+      const data = await kv.get(key);
+      console.log('Got KV result:', data.value);
+      return data.value;
     },
-    userId: 'test-user'
-  }
+    set: async (key: unknown[], value: unknown) => {
+      console.log('Setting KV:', key, value);
+      await kv.set(key, value);
+    }
+  },
+  userId: 'test-user',
+  ...alpineMethods
 };
+
+console.log('Card data initialized:', globalThis.cardData.info);
 
 // File loading functions
 async function loadView(name: string): Promise<string> {
@@ -32,7 +50,45 @@ async function loadView(name: string): Promise<string> {
 async function loadCardTemplate(name: string): Promise<string> {
   try {
     const html = await Deno.readTextFile(`src/cards/${name}/${name}.html`);
-    return html;
+    
+    // Add initialization script for client
+    const initScript = `
+      <script>
+        if (!window.cardData) {
+          window.cardData = {
+            info: {
+              kv: {
+                get: async (key) => {
+                  const response = await fetch(\`/kv/get?key=\${key.join(',')}\`);
+                  const data = await response.json();
+                  return data;
+                },
+                set: async (key, value) => {
+                  await fetch('/kv/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: key.join(','), value })
+                  });
+                }
+              },
+              userId: 'test-user',
+              handleKvUpdate: async (index, message) => {
+                const key = ['cards', 'info', 'test-user', index];
+                const value = { message, index, timestamp: Date.now() };
+                await window.cardData.info.kv.set(key, value);
+              },
+              loadCardMessage: async (index) => {
+                const key = ['cards', 'info', 'test-user', index];
+                const data = await window.cardData.info.kv.get(key);
+                return data?.message || '';
+              }
+            }
+          };
+        }
+      </script>
+    `;
+    
+    return initScript + html;
   } catch (error) {
     console.error(`Error loading card template ${name}:`, error);
     throw error;
@@ -182,6 +238,27 @@ async function handler(req: Request): Promise<Response> {
     try {
       const cardName = cardMatch[1];
       console.log(`Loading card template: ${cardName}`);
+
+      // Re-initialize card data for each template request
+      if (cardName === 'info') {
+        await infoCard.init(kv, 'test-user');
+        
+        // Update methods in case they were lost
+        globalThis.cardData.info = {
+          kv: {
+            get: async (key: unknown[]) => {
+              const data = await kv.get(key);
+              return data.value;
+            },
+            set: async (key: unknown[], value: unknown) => {
+              await kv.set(key, value);
+            }
+          },
+          userId: 'test-user',
+          ...infoCard.getAlpineMethods()
+        };
+      }
+
       const content = await loadCardTemplate(cardName);
       return new Response(content, {
         headers: { "Content-Type": "text/html" },

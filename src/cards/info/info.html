@@ -7,15 +7,19 @@
        cardData: null,
        async init() {
          // Wait for card data to be initialized
-         while (!globalThis.cardData?.info) {
+         while (!globalThis.cardData?.info?.handleKvUpdate) {
+           console.log('Waiting for card data...');
            await new Promise(resolve => setTimeout(resolve, 100));
          }
+         console.log('Card data initialized:', globalThis.cardData.info);
          this.cardData = globalThis.cardData.info;
          await this.loadMessage();
        },
        async submitMessage() {
+         console.log('Submitting message:', this.inputValue);
+         console.log('Card data:', this.cardData);
          if (!this.cardData?.handleKvUpdate) {
-           console.error('Card methods not initialized');
+           console.error('Card methods not initialized:', this.cardData);
            return;
          }
          await this.cardData.handleKvUpdate(parseInt(this.cardIndex), this.inputValue);
@@ -23,8 +27,10 @@
          this.inputValue = '';
        },
        async loadMessage() {
+         console.log('Loading message for index:', this.cardIndex);
+         console.log('Card data:', this.cardData);
          if (!this.cardData?.loadCardMessage) {
-           console.error('Card methods not initialized');
+           console.error('Card methods not initialized:', this.cardData);
            return;
          }
          this.message = await this.cardData.loadCardMessage(parseInt(this.cardIndex));
