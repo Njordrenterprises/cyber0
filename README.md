@@ -4,99 +4,199 @@ A hypermedia-driven card system built with Deno, HTMX, and Alpine.js.
 
 ## Architecture
 
-The system follows a card-based architecture where each card is a self-contained module with three required files:
+The system follows a modular card-based architecture where each card is a self-contained component with:
 
-- HTML template with HTMX and Alpine.js bindings
-- CSS for card-specific styling
-- JavaScript for Alpine.js component logic
+1. Server-side TypeScript class extending base `Card`
+2. Client-side Alpine.js component
+3. Scoped CSS styles
+4. Shared TypeScript interfaces
+5. Cross-platform data access
 
-### Key Features
+### Key Components
 
-- Server-side dynamic loading of card modules
-- Real-time updates via EventSource
-- Persistent storage with Deno KV
-- Minimal client-side JavaScript
+- `db/card.ts` - Base card class with KV operations
+- `db/kv.ts` - Centralized KV store management
+- `db/client/types.ts` - Shared TypeScript interfaces and cross-platform helpers
+- `db/client/[card-name].ts` - Client-side card methods
 
-## Project Structure
+## Cross-Platform Data Access
 
+The system uses a unified approach to handle both browser (Alpine.js) and Deno contexts:
+
+```typescript
+// Types that work in both environments
+declare global {
+  interface Window extends Record<string, unknown> {
+    cardData: CardData;
+  }
+  var cardData: CardData;
+}
+
+// Helper to access cardData consistently
+export const getCardData = (): CardData => {
+  if (typeof window !== "undefined") {
+    return (window as Window).cardData;
+  }
+  return globalThis.cardData;
+};
 ```
-/
-├── src/
-│   ├── cards/              # Card modules
-│   │   ├── cards.js        # Base card functionality
-│   │   ├── cards.css       # Shared card styles
-│   │   └── info/           # Example card
-│   │       ├── info.js     # Card logic
-│   │       ├── info.css    # Card styles
-│   │       └── info.html   # Card template
-│   ├── js/                 # Client libraries
-│   │   ├── htmx.min.js
-│   │   └── alpine.min.js
-│   └── views/              # View templates
-├── main.ts                 # Server + routing
-├── main.css               # Global styles
-└── index.html            # Application shell
+
+## Creating a New Card
+
+1. Create the card directory:
+   ```bash
+   mkdir -p src/cards/[card-name]
+   ```
+
+2. Create the server-side card class (`src/cards/[card-name]/[card-name].ts`):
+   ```typescript
+   import { Card, CardKvEntry, CardState } from "../cards.ts";
+
+   export interface MyCardState extends CardState {
+     // Card-specific state
+   }
+
+   export interface MyCardKvEntry extends CardKvEntry {
+     // Card-specific KV data
+   }
+
+   class MyCard extends Card<MyCardState, MyCardKvEntry> {
+     protected override async loadInitialState(): Promise<void> {
+       const entry = await this.getKvEntry();
+       if (entry) {
+         // Initialize from KV
+       }
+     }
+
+     override getState(): MyCardState {
+       return {
+         ...super.getState(),
+         // Return card state
+       };
+     }
+
+     protected override getKvKey(): Deno.KvKey {
+       return ["cards", this.id, this.userId];
+     }
+
+     getAlpineMethods() {
+       return {
+         // Expose methods for client
+       };
+     }
+   }
+
+   const myCard = new MyCard("my-card");
+   export default myCard;
+   ```
+
+3. Create the client-side methods (`db/client/[card-name].ts`):
+   ```typescript
+   import type { MyCardMethods } from "./types.ts";
+   import { getCardData } from "./types.ts";
+
+   export function getMyCardMethods(): MyCardMethods {
+     return {
+       kv: {
+         get: async <T>(key: unknown[]) => {
+           const response = await fetch(`/kv/get?key=${key.join(",")}`);
+           return await response.json() as T | null;
+         },
+         set: async (key: unknown[], value: unknown) => {
+           await fetch("/kv/set", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({ key: key.join(","), value }),
+           });
+         },
+       },
+       // Card-specific methods using getCardData()
+     };
+   }
+
+   export function getMyCardScript(): string {
+     return `
+       globalThis.cardData = globalThis.cardData || {};
+       globalThis.cardData.myCard = globalThis.cardData.myCard || ${
+       JSON.stringify(getMyCardMethods())
+     };
+     `;
+   }
+   ```
+
+4. Create the HTML template (`src/cards/[card-name]/[card-name].html`):
+   ```html
+   <div
+     class="card my-card"
+     x-data="{ 
+          cardData: window.cardData.myCard,
+          async init() {
+            // Initialize card
+          }
+        }"
+     x-init="init"
+   >
+     <!-- Card content -->
+   </div>
+   ```
+
+5. Create the CSS styles (`src/cards/[card-name]/[card-name].css`):
+   ```css
+   .my-card {
+     /* Card-specific styles */
+   }
+   ```
+
+## Card API
+
+Each card exposes a standard API through `window.cardData.[cardName]` in the browser and `globalThis.cardData.[cardName]` in Deno:
+
+```typescript
+interface CardData {
+  kv: {
+    get: <T>(key: unknown[]) => Promise<T | null>;
+    set: (key: unknown[], value: unknown) => Promise<void>;
+  };
+  // Card-specific methods
+}
+
+// Access in TypeScript:
+const cardData = getCardData();
+await cardData.myCard.someMethod();
+
+// Access in HTML template:
+x-data="{ cardData: window.cardData.myCard }"
 ```
 
 ## Development Standards
 
-### Card Module Requirements
+1. Type Safety
+   - All card state must be typed
+   - Use shared interfaces from `db/client/types.ts`
+   - Validate all data operations
+   - Use proper Window/globalThis types
 
-Every card MUST include all three files:
+2. State Management
+   - Server is source of truth
+   - Use KV for persistence
+   - Use Alpine.js for UI state
+   - Use getCardData() in TypeScript
 
-1. `[name].html` - Template and bindings
-2. `[name].css` - Card-specific styles
-3. `[name].js` - Component logic
+3. Styling
+   - Use scoped class names
+   - Follow CSS custom properties
+   - Maintain responsive design
 
-The server automatically bundles these files together when serving card templates.
+## Example Cards
 
-### State Management
+### Info Card
 
-- Persistent state stored in Deno KV
-- UI state managed by Alpine.js
-- Real-time updates via EventSource
-- Standard KV operations through REST endpoints
+A simple message board card that demonstrates:
 
-### Server Features
+- KV persistence
+- Real-time updates
+- Message CRUD operations
+- Responsive design
+- Cross-platform data access
 
-- Dynamic loading of views and cards
-- Automatic bundling of card files
-- KV operations via standard endpoints
-- Static file serving for libraries
-
-## Getting Started
-
-1. Install Deno
-2. Clone the repository
-3. Run the development server:
-   ```bash
-   deno task dev
-   ```
-
-## Creating a New Card
-
-1. Create a new directory in `src/cards/[card-name]/`
-2. Add all three required files:
-   - `[card-name].html`
-   - `[card-name].css`
-   - `[card-name].js`
-3. Follow the existing card patterns for:
-   - HTMX attributes
-   - Alpine.js bindings
-   - KV operations
-
-## API Endpoints
-
-### Views
-
-- `GET /views/[name]` - Load a view template
-
-### Cards
-
-- `GET /cards/[name]/template` - Load a card template
-
-### KV Operations
-
-- `GET /kv/get` - Retrieve KV data
-- `POST /kv/set` - Update KV data
-- `GET /kv/watch` - Watch KV changes
+See `src/cards/info` for implementation details.

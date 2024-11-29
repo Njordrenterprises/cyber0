@@ -1,6 +1,5 @@
 import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
 import infoCard from "./src/cards/info/info.ts";
-import cardManager from "./src/cards/card-manager/card-manager.ts";
 import * as db from "./db/kv.ts";
 import { getClientScript } from "./db/client/index.ts";
 
@@ -10,7 +9,6 @@ await db.initKv();
 // Initialize cards
 console.log('Initializing cards...');
 await infoCard.init('test-user');
-await cardManager.init('test-user');
 
 // File loading functions
 async function loadView(name: string): Promise<string> {
@@ -44,32 +42,6 @@ async function handler(req: Request): Promise<Response> {
   }
   if (url.pathname === '/kv/set' && req.method === 'POST') {
     return db.handleKvSet(req);
-  }
-
-  // Handle card management operations
-  if (url.pathname === '/cards/list' && req.method === 'GET') {
-    const cards = await db.getCardList('test-user');
-    return new Response(JSON.stringify(cards), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  if (url.pathname === '/cards/manage/add' && req.method === 'POST') {
-    const { name, type } = await req.json();
-    await db.addCard('test-user', name, type);
-    return new Response('OK');
-  }
-
-  if (url.pathname === '/cards/manage/delete' && req.method === 'POST') {
-    const { id } = await req.json();
-    await db.deleteCard('test-user', id);
-    return new Response('OK');
-  }
-
-  if (url.pathname === '/cards/manage/rename' && req.method === 'POST') {
-    const { id, name } = await req.json();
-    await db.renameCard('test-user', id, name);
-    return new Response('OK');
   }
 
   // Handle view loading

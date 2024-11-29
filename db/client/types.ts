@@ -15,13 +15,6 @@ export interface CardEntry {
   timestamp: number;
 }
 
-export interface CardInfo {
-  id: string;
-  name: string;
-  type: string;
-  created: number;
-}
-
 export interface InfoCardMethods {
   kv: KvMethods;
   userId: string;
@@ -30,20 +23,23 @@ export interface InfoCardMethods {
   loadCardMessages: (cardId: string) => Promise<CardMessage[]>;
 }
 
-export interface CardManagerMethods {
-  addCard: (name: string, type: string) => Promise<void>;
-  deleteCard: (id: string) => Promise<void>;
-  renameCard: (id: string, newName: string) => Promise<void>;
-  getCards: () => Promise<CardInfo[]>;
-}
-
 export interface CardData {
   info: InfoCardMethods;
-  cards: CardManagerMethods;
 }
 
+// This creates a unified type that works in both Deno and browser
 declare global {
-  interface Window {
+  interface Window extends Record<string, unknown> {
     cardData: CardData;
   }
-} 
+  
+  var cardData: CardData;
+}
+
+// Use this to access cardData in a cross-platform way
+export const getCardData = (): CardData => {
+  if (typeof window !== 'undefined') {
+    return (window as Window).cardData;
+  }
+  return globalThis.cardData;
+}; 

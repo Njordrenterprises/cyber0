@@ -1,133 +1,201 @@
 # Card-Based Architecture System Rules
 
-## Directory Structure
+## Card Module Structure
 
-```plaintext
-/
-├── src/
-│   ├── cards/              # Card modules directory
-│   │   ├── cards.js        # Base card class + KV operations
-│   │   ├── cards.css       # Shared card styles
-│   │   └── [card-name]/    # Individual card directories
-│   │       ├── [card-name].js   # Card implementation + Alpine.js component
-│   │       ├── [card-name].css  # Card-specific styles
-│   │       └── [card-name].html # Card template
-│   ├── js/                 # Client-side libraries
-│   └── views/              # View templates
-├── main.ts                # Server entry point (routing + dynamic loading)
-└── index.html            # Application shell
+Every card MUST follow this exact structure:
+
+### 1. Server-Side Card Class
+
+```typescript
+// src/cards/[card-name]/[card-name].ts
+import { Card, CardState, CardKvEntry } from '../cards.ts';
+import type { CardMessage } from '../../../db/client/types.ts';
+
+export interface [CardName]State extends CardState {
+  // Card-specific state
+}
+
+export interface [CardName]KvEntry extends CardKvEntry {
+  // Card-specific KV entry data
+}
+
+class [CardName]Card extends Card<[CardName]State, [CardName]KvEntry> {
+  // Required overrides
+  protected override async loadInitialState(): Promise<void> {
+    const entry = await this.getKvEntry();
+    if (entry) {
+      // Initialize card state from KV
+    }
+  }
+
+  override getState(): [CardName]State {
+    return {
+      ...super.getState(),
+      // Return card-specific state
+    };
+  }
+
+  protected override getKvKey(): Deno.KvKey {
+    return ['cards', this.id, this.userId];
+  }
+
+  // Alpine.js methods
+  getAlpineMethods() {
+    return {
+      // Expose methods for client-side use
+    };
+  }
+}
+
+const [cardName]Card = new [CardName]Card('[card-name]');
+export default [cardName]Card;
+```
+
+### 2. Client-Side Methods
+
+```typescript
+// db/client/[card-name].ts
+import type { [CardName]Methods } from './types.ts';
+import { getCardData } from './types.ts';
+
+export function get[CardName]Methods(): [CardName]Methods {
+  return {
+    kv: {
+      get: async <T>(key: unknown[]) => {
+        const response = await fetch(`/kv/get?key=${key.join(',')}`);
+        return await response.json() as T | null;
+      },
+      set: async (key: unknown[], value: unknown) => {
+        await fetch('/kv/set', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: key.join(','), value })
+        });
+      }
+    },
+    // Card-specific client methods that use getCardData() for cross-platform access
+  };
+}
+
+export function get[CardName]Script(): string {
+  return `
+    globalThis.cardData = globalThis.cardData || {};
+    globalThis.cardData.[cardName] = globalThis.cardData.[cardName] || ${JSON.stringify(get[CardName]Methods())};
+  `;
+}
+```
+
+### 3. HTML Template
+
+```html
+<!-- src/cards/[card-name]/[card-name].html -->
+<div
+  class="card [card-name]-card"
+  x-data="{ 
+       cardData: window.cardData.[cardName],
+       async init() {
+         // Initialize card data
+       }
+     }"
+  x-init="init"
+>
+  <!-- Card template -->
+</div>
+```
+
+### 4. CSS Styles
+
+```css
+/* src/cards/[card-name]/[card-name].css */
+.[card-name]-card {
+  /* Card-specific styles */
+}
+```
+
+## Cross-Platform Data Access
+
+1. Types:
+
+```typescript
+declare global {
+  interface Window extends Record<string, unknown> {
+    cardData: CardData;
+  }
+  var cardData: CardData;
+}
+```
+
+2. Access Helper:
+
+```typescript
+export const getCardData = (): CardData => {
+  if (typeof window !== "undefined") {
+    return (window as Window).cardData;
+  }
+  return globalThis.cardData;
+};
 ```
 
 ## Initialization Rules
 
-### 1. Server-Side Card Initialization
-```typescript
-// Initialize card instance FIRST
-await infoCard.init(kv, 'test-user');
+1. Server-Side:
+   - Card class MUST extend base `Card`
+   - MUST implement required overrides
+   - MUST export singleton instance
 
-// THEN expose methods to globalThis
-globalThis.cardData = {
-  info: {
-    kv: { /* KV methods */ },
-    userId: 'test-user',
-    ...infoCard.getAlpineMethods()  // Expose bound methods
-  }
-};
-```
+2. Client-Side:
+   - MUST use Alpine.js for state management
+   - MUST use `window.cardData.[cardName]` in templates
+   - MUST use `getCardData()` in TypeScript code
+   - MUST handle cleanup in destroy()
 
-### 2. Client-Side Card Initialization
-```typescript
-// In card template x-data
-{
-  cardData: null,
-  async init() {
-    // Get already initialized card data
-    this.cardData = globalThis.cardData.info;
-    await this.loadMessage();
-  }
-}
-```
-
-### 3. Initialization Order
-1. Server initializes card instance
-2. Server exposes methods to globalThis
-3. Client gets reference to initialized data
-4. Client uses methods directly
-
-NEVER:
-- Poll for initialization
-- Re-initialize card data
-- Modify globalThis after initial setup
-
-## Module Standards
-
-### 1. Card Module Requirements
-
-Every card MUST have exactly three files:
-- `[card-name].html` - Template with Alpine.js bindings
-- `[card-name].css` - Card-specific styles
-- `[card-name].js` - Alpine.js component logic
-
-No exceptions to this structure are allowed. All three files are loaded together by the server.
-
-### 2. Card Implementation Rules
-
-- HTML: Contains only template and Alpine.js bindings
-- CSS: Contains only card-specific styles
-- JS: Contains only Alpine.js component logic and KV interactions
-
-### 3. Server Loading
-
-The server automatically bundles all three card files:
-1. Loads HTML template
-2. Inlines CSS in a style tag
-3. Inlines JS in a module script tag
+3. Styling:
+   - MUST use scoped class names
+   - MUST follow shared style variables
+   - MUST be responsive
 
 ## Data Flow Rules
 
-### 1. KV Operations
+1. KV Operations:
+   - Use standard KV endpoints
+   - Follow key structure: ['cards', cardId, userId]
+   - Handle errors gracefully
+   - Always use getCardData() for access
 
-- All KV operations go through standard endpoints:
-  - GET /kv/get
-  - POST /kv/set
-  - GET /kv/watch (EventSource)
+2. State Management:
+   - Server maintains source of truth
+   - Client syncs via KV operations
+   - Use EventSource for real-time updates
 
-### 2. Component Integration
+## API Standards
 
-- Card modules expose public API for Alpine.js
-- Components use public API only
-- Watch KV updates through EventSource
-- Handle cleanup in destroy()
+1. Client Methods:
+   - MUST be async
+   - MUST use shared types
+   - MUST handle errors
+   - MUST use getCardData() for access
 
-### 3. State Management
-
-- Each card manages its own state
-- KV watch triggers state reloads
-- Alpine.js handles UI updates
-
-## Server Endpoints
-
-1. Views: `GET /views/[view-name]`
-2. Cards: `GET /cards/[card-name]/template`
-3. KV Operations:
-   - `POST /kv/get`
-   - `POST /kv/set`
-   - `GET /kv/watch`
+2. Server Methods:
+   - MUST be bound in getAlpineMethods()
+   - MUST maintain type safety
+   - MUST validate input
 
 ## Best Practices
 
-1. Card Development
-   - Always create all three required files
-   - Keep template logic in HTML
-   - Keep styles in CSS
-   - Keep component logic in JS
+1. Type Safety:
+   - Use TypeScript interfaces
+   - Extend base types
+   - Validate all data
+   - Use proper Window/globalThis types
 
-2. State Management
-   - Use KV for persistence
-   - Use Alpine.js for UI state
-   - Use EventSource for updates
+2. Error Handling:
+   - Graceful degradation
+   - User feedback
+   - Console logging
+   - Handle both browser and Deno contexts
 
-3. Error Handling
-   - Validate KV operations
-   - Handle network errors
-   - Provide user feedback
+3. Performance:
+   - Minimize KV operations
+   - Batch updates when possible
+   - Clean up resources
+   - Cache cardData access when appropriate
