@@ -6,70 +6,63 @@
 /
 ├── src/
 │   ├── cards/              # Card modules directory
-│   │   ├── cards.ts        # Base card class + KV operations
+│   │   ├── cards.js        # Base card class + KV operations
 │   │   ├── cards.css       # Shared card styles
 │   │   └── [card-name]/    # Individual card directories
-│   │       ├── [card-name].ts   # Card implementation + Alpine.js component
+│   │       ├── [card-name].js   # Card implementation + Alpine.js component
 │   │       ├── [card-name].css  # Card-specific styles
 │   │       └── [card-name].html # Card template
 │   ├── js/                 # Client-side libraries
 │   └── views/              # View templates
-├── main.ts                # Server entry point (routing only)
+├── main.ts                # Server entry point (routing + dynamic loading)
 └── index.html            # Application shell
 ```
 
-## Module Responsibilities
+## Module Standards
 
-### 1. Base Card Module (cards.ts)
+### 1. Card Module Requirements
 
-Must contain:
+Every card MUST have exactly three files:
+- `[card-name].html` - Template with Alpine.js bindings
+- `[card-name].css` - Card-specific styles
+- `[card-name].js` - Alpine.js component logic
 
-- Base Card class with KV operations
-- Common interfaces (CardState, CardKvEntry)
-- KV endpoint handlers (get, set, watch)
-- Card template serving
-- Type declarations for KV operations
+No exceptions to this structure are allowed. All three files are loaded together by the server.
 
-### 2. Card Implementation Module ([card-name].ts)
+### 2. Card Implementation Rules
 
-Must contain:
+- HTML: Contains only template and Alpine.js bindings
+- CSS: Contains only card-specific styles
+- JS: Contains only Alpine.js component logic and KV interactions
 
-- Card-specific state interface extending CardState
-- Card-specific KV entry interface extending CardKvEntry
-- Card class extending base Card
-- Alpine.js component registration
-- Public API methods for Alpine.js interaction
+### 3. Server Loading
 
-### 3. Card Template ([card-name].html)
-
-Must include:
-
-- `class="card [card-name]-card"` - Card class naming
-- `x-data="[card-name]Card"` - Alpine.js binding
-- `x-init="init"` - Component initialization
+The server automatically bundles all three card files:
+1. Loads HTML template
+2. Inlines CSS in a style tag
+3. Inlines JS in a module script tag
 
 ## Data Flow Rules
 
 ### 1. KV Operations
 
-- All KV operations must go through base Card class
-- Use structured keys: `['cards', cardId, userId, ...rest]`
-- Handle watch events for real-time updates
-- Maintain atomic updates with timestamps
+- All KV operations go through standard endpoints:
+  - GET /kv/get
+  - POST /kv/set
+  - GET /kv/watch (EventSource)
 
 ### 2. Component Integration
 
 - Card modules expose public API for Alpine.js
-- Components use public API only, never direct KV access
+- Components use public API only
 - Watch KV updates through EventSource
 - Handle cleanup in destroy()
 
 ### 3. State Management
 
-- Base state defined in CardState interface
-- Card-specific state extends base state
-- State updates trigger UI updates via Alpine.js
+- Each card manages its own state
 - KV watch triggers state reloads
+- Alpine.js handles UI updates
 
 ## Server Endpoints
 
@@ -79,3 +72,21 @@ Must include:
    - `POST /kv/get`
    - `POST /kv/set`
    - `GET /kv/watch`
+
+## Best Practices
+
+1. Card Development
+   - Always create all three required files
+   - Keep template logic in HTML
+   - Keep styles in CSS
+   - Keep component logic in JS
+
+2. State Management
+   - Use KV for persistence
+   - Use Alpine.js for UI state
+   - Use EventSource for updates
+
+3. Error Handling
+   - Validate KV operations
+   - Handle network errors
+   - Provide user feedback

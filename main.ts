@@ -1,87 +1,90 @@
-/// <reference lib="deno.unstable" />
+import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
 
-import { handleView, serveViewAsset } from './src/views/views.ts';
-import { handleCardRequest } from './src/cards/cards.ts';
-
-// Serve static files from public directory
-async function serveStatic(req: Request): Promise<Response> {
-  const url = new URL(req.url);
-  const filePath = decodeURIComponent(url.pathname);
-  
+async function loadView(name: string): Promise<string> {
   try {
-    if (filePath === '/') {
-      const content = await Deno.readFile('./index.html');
-      return new Response(content, {
-        headers: { 'Content-Type': 'text/html' },
-      });
-    }
-
-    // Serve TypeScript modules
-    if (filePath.endsWith('.ts')) {
-      const content = await Deno.readFile('.' + filePath);
-      return new Response(content, {
-        headers: { 'Content-Type': 'application/typescript' },
-      });
-    }
-
-    const content = await Deno.readFile('.' + filePath);
-    const contentType = getContentType(filePath);
-    return new Response(content, {
-      headers: { 'Content-Type': contentType },
-    });
+    const html = await Deno.readTextFile(`src/views/${name}/${name}.html`);
+    const css = await Deno.readTextFile(`src/views/${name}/${name}.css`);
+    const js = await Deno.readTextFile(`src/views/${name}/${name}.js`);
+    
+    return `
+      <style>${css}</style>
+      ${html}
+      <script type="module">${js}</script>
+    `;
   } catch (error) {
-    if (error instanceof Deno.errors.NotFound) {
-      return new Response('Not Found', { status: 404 });
-    }
-    return new Response('Internal Server Error', { status: 500 });
+    console.error(`Error loading view ${name}:`, error);
+    throw error;
   }
 }
 
-function getContentType(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase() || '';
-  const types: Record<string, string> = {
-    'html': 'text/html',
-    'css': 'text/css',
-    'js': 'text/javascript',
-    'json': 'application/json',
-    'png': 'image/png',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'gif': 'image/gif',
-    'svg': 'image/svg+xml'
-  };
-  return types[ext] || 'application/octet-stream';
+async function loadCardTemplate(name: string): Promise<string> {
+  try {
+    const html = await Deno.readTextFile(`src/cards/${name}/${name}.html`);
+    const css = await Deno.readTextFile(`src/cards/${name}/${name}.css`);
+    const js = await Deno.readTextFile(`src/cards/${name}/${name}.js`);
+    
+    return `
+      <style>${css}</style>
+      ${html}
+      <script type="module">${js}</script>
+    `;
+  } catch (error) {
+    console.error(`Error loading card template ${name}:`, error);
+    throw error;
+  }
 }
 
-// Main request handler
-function handler(req: Request): Promise<Response> {
+async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const path = url.pathname;
+  console.log(`${req.method} ${url.pathname}`);
 
-  console.log('Request:', path);
-
-  // Handle card requests (including KV operations)
-  if (path.startsWith('/cards/')) {
-    return handleCardRequest(req);
+  // Serve index.html at root
+  if (url.pathname === "/") {
+    try {
+      const content = await Deno.readFile("index.html");
+      return new Response(content, {
+        headers: { "Content-Type": "text/html" },
+      });
+    } catch (error) {
+      console.error("Error serving index.html:", error);
+      return new Response("Not Found", { status: 404 });
+    }
   }
 
-  // Handle view requests
-  const viewMatch = path.match(/^\/views\/([^\/]+)$/);
+  // Dynamic view loading
+  const viewMatch = url.pathname.match(/^\/views\/([^\/]+)$/);
   if (viewMatch) {
-    return handleView(viewMatch[1]);
+    try {
+      const viewName = viewMatch[1];
+      const content = await loadView(viewName);
+      return new Response(content, {
+        headers: { "Content-Type": "text/html" },
+      });
+    } catch (error) {
+      return new Response("View Not Found", { status: 404 });
+    }
   }
 
-  // Handle view assets
-  const viewAssetMatch = path.match(/^\/views\/(.+)$/);
-  if (viewAssetMatch) {
-    return serveViewAsset(viewAssetMatch[1]);
+  // Dynamic card template loading
+  const cardMatch = url.pathname.match(/^\/cards\/([^\/]+)\/template$/);
+  if (cardMatch) {
+    try {
+      const cardName = cardMatch[1];
+      const content = await loadCardTemplate(cardName);
+      return new Response(content, {
+        headers: { "Content-Type": "text/html" },
+      });
+    } catch (error) {
+      return new Response("Card Template Not Found", { status: 404 });
+    }
   }
 
-  // Serve static files
-  return serveStatic(req);
+  // Static file serving (for root files like main.css and libraries)
+  return serveDir(req, {
+    fsRoot: ".",
+    urlRoot: "",
+  });
 }
 
-// Start the server
-const port = 8000;
-console.log(`Server running on http://localhost:${port}`);
-Deno.serve({ port }, handler);
+console.log("Starting server on http://localhost:8000");
+Deno.serve({ port: 8000 }, handler);

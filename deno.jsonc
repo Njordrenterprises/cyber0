@@ -1,14 +1,23 @@
 {
+  "tasks": {
+    "dev": "deno run --allow-net --allow-read --allow-write --watch main.ts"
+  },
+  "fmt": {
+    "include": ["src/"],
+    "exclude": ["src/js/htmx.min.js", "src/js/alpine.min.js"],
+    "indentWidth": 2,
+    "lineWidth": 80,
+    "semiColons": true,
+    "singleQuote": true
+  },
   "lint": {
-    "files": {
-      "exclude": [
-        "src/js/htmx.min.js",
-        "src/js/alpine.min.js"
-      ]
+    "include": ["src/"],
+    "exclude": ["src/js/htmx.min.js", "src/js/alpine.min.js"],
+    "rules": {
+      "tags": ["recommended"]
     }
   },
-  "tasks": {
-    "dev": "deno run --allow-net --allow-read --allow-env --unstable main.ts",
-    "lint": "deno lint"
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
   }
 } 
