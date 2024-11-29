@@ -48,7 +48,7 @@ class InfoCard extends Card<InfoState, InfoKvEntry> {
   // Alpine.js methods
   async handleKvUpdate(cardId: string, newMessage: string) {
     console.log('Handling KV update:', cardId, newMessage);
-    const key = ['cards', 'info', this.userId, cardId];
+    const _key = ['cards', 'info', this.userId, cardId];
     let entry = await this.getCardEntry<InfoKvEntry>(cardId);
     if (!entry) {
       entry = { messages: [], cardId, timestamp: Date.now() };

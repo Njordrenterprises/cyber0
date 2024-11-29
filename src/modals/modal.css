@@ -1,7 +1,9 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(10, 10, 15, 0.8);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   z-index: 10;
 }
 
@@ -18,17 +20,47 @@
   position: relative;
   min-width: 24rem;
   max-width: 36rem;
-  border-radius: var(--border-radius);
-  background: var(--bg-color);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  border-radius: var(--card-radius);
   padding: var(--spacing-lg);
-  box-shadow: var(--shadow-lg);
+  animation: modalGlow 2s ease-in-out infinite alternate;
+  overflow: hidden;
+}
+
+@keyframes modalGlow {
+  0% {
+    box-shadow: 0 0 20px var(--primary-glow);
+  }
+  100% {
+    box-shadow: 0 0 40px var(--primary-glow);
+  }
+}
+
+.modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    var(--primary) 50%, 
+    transparent 100%
+  );
+  animation: scanline 2s linear infinite;
 }
 
 .modal-title {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 500;
-  color: var(--text-color);
+  color: var(--primary);
   margin-bottom: var(--spacing-md);
+  text-shadow: 0 0 10px var(--primary-glow);
 }
 
 .modal-body {
@@ -49,62 +81,51 @@
   justify-content: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--border-radius-sm);
+  border-radius: var(--input-radius);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  text-shadow: 0 0 5px var(--primary-glow);
 }
 
 .modal-btn-secondary {
-  background: transparent;
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
 }
 
 .modal-btn-secondary:hover {
-  background: var(--hover-color);
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
 }
 
 .modal-btn-primary {
   background: var(--primary);
-  color: white;
+  color: var(--text-primary);
   border: none;
+  box-shadow: 0 0 15px var(--primary-glow);
 }
 
 .modal-btn-primary:hover {
   background: var(--primary-dark);
+  box-shadow: 0 0 30px var(--primary-glow);
 }
 
 .modal-input {
   width: 100%;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
   background: var(--input-bg);
-  color: var(--text-color);
+  border: 1px solid var(--input-border);
+  color: var(--text-primary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--input-radius);
   font-size: 1rem;
+  transition: all 0.3s ease;
 }
 
 .modal-input:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary-light);
-}
-
-/* Header styles */
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-md) 0;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.header h1 {
-  margin: 0;
-  font-size: 2rem;
-  color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
 }
 
 /* Add card button */
@@ -112,22 +133,33 @@
   width: 2.5rem;
   height: 2.5rem;
   border-radius: 50%;
-  background: var(--primary);
-  color: white;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--primary);
   font-size: 1.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: var(--shadow-md);
-  transition: all 0.2s ease;
-  border: none;
+  transition: all 0.3s ease;
+  text-shadow: 0 0 5px var(--primary-glow);
+  animation: buttonGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes buttonGlow {
+  0% {
+    box-shadow: 0 0 15px var(--primary-glow);
+  }
+  100% {
+    box-shadow: 0 0 30px var(--primary-glow);
+  }
 }
 
 .add-card-btn:hover {
-  background: var(--primary-dark);
+  background: var(--card-bg-hover);
+  border-color: var(--primary);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 0 30px var(--primary-glow);
 }
 
 .add-card-btn:active {
