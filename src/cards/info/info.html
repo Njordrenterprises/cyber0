@@ -1,22 +1,46 @@
 <!-- src/cards/info/info.html -->
-<link rel="stylesheet" href="/src/cards/info/info.css">
-<script type="module">
-  import '/src/cards/info/info.js';
-</script>
-<div class="card info-card" x-data="infoCard" x-init="init">
-    <div class="card-content">
-        <h2>Info Card #<span x-text="cardIndex + 1"></span></h2>
-        <div class="input-container">
-            <input type="text" 
-                   x-model="newMessage" 
-                   @keyup.enter="updateMessage"
-                   placeholder="Enter a message">
-            <button @click="updateMessage" class="submit-btn">Submit</button>
-        </div>
-        <div class="message-container">
-            <template x-for="message in messages" :key="message">
-                <div class="message" x-text="message"></div>
-            </template>
-        </div>
+<div class="card info-card"
+     x-data="{ 
+       message: '',
+       inputValue: '',
+       cardIndex: $el.closest('.card-wrapper').dataset.index,
+       cardData: null,
+       async init() {
+         // Wait for card data to be initialized
+         while (!globalThis.cardData?.info) {
+           await new Promise(resolve => setTimeout(resolve, 100));
+         }
+         this.cardData = globalThis.cardData.info;
+         await this.loadMessage();
+       },
+       async submitMessage() {
+         if (!this.cardData?.handleKvUpdate) {
+           console.error('Card methods not initialized');
+           return;
+         }
+         await this.cardData.handleKvUpdate(parseInt(this.cardIndex), this.inputValue);
+         this.message = this.inputValue;
+         this.inputValue = '';
+       },
+       async loadMessage() {
+         if (!this.cardData?.loadCardMessage) {
+           console.error('Card methods not initialized');
+           return;
+         }
+         this.message = await this.cardData.loadCardMessage(parseInt(this.cardIndex));
+       }
+     }"
+     x-init="await init()">
+  <div class="info-content">
+    <h1>Info Card #<span x-text="parseInt(cardIndex) + 1"></span></h1>
+    <form @submit.prevent="submitMessage">
+      <input type="text" 
+             x-model="inputValue" 
+             placeholder="Enter a message">
+      <button type="submit" class="submit-btn">Submit</button>
+    </form>
+    <div class="message-display" x-show="message">
+      <p x-text="message"></p>
     </div>
+  </div>
 </div>
