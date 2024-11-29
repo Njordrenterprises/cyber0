@@ -10,7 +10,9 @@
          await this.loadCards();
        },
        async loadCards() {
-         this.cards = await window.cardData.info.getCards();
+         const fetchedCards = await window.cardData.info.getCards();
+         // Sort cards by created timestamp, newest first
+         this.cards = fetchedCards.sort((a, b) => b.created - a.created);
        },
        async createCard(name) {
          if (!name.trim()) return;
@@ -51,8 +53,12 @@
              }
            }"
            x-init="init">
+        <button @click="window.cardData.info.deleteCard(card.id).then(() => $dispatch('refresh-cards'))" 
+                class="delete-btn">×</button>
         <div class="info-content">
-          <h2 x-text="card.name"></h2>
+          <div class="card-header">
+            <h2 x-text="card.name"></h2>
+          </div>
           
           <form @submit.prevent="submitMessage" class="input-container">
             <input type="text" 
@@ -71,11 +77,6 @@
                 </div>
               </div>
             </template>
-          </div>
-
-          <div class="card-actions">
-            <button @click="window.cardData.info.deleteCard(card.id).then(() => $dispatch('refresh-cards'))" 
-                    class="delete-btn">×</button>
           </div>
         </div>
       </div>

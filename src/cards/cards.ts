@@ -46,5 +46,5 @@ export async function getCards(userId: string, type: string): Promise<BaseCard[]
   const key = ['cards', type, userId, 'list'];
   const kv = getKv();
   const result = await kv.get<BaseCard[]>(key);
-  return result.value || [];
+  return (result.value || []).sort((a, b) => b.created - a.created);
 }
