@@ -1,0 +1,14 @@
+{
+  "lint": {
+    "files": {
+      "exclude": [
+        "src/js/htmx.min.js",
+        "src/js/alpine.min.js"
+      ]
+    }
+  },
+  "tasks": {
+    "dev": "deno run --allow-net --allow-read --allow-env --unstable main.ts",
+    "lint": "deno lint"
+  }
+} 

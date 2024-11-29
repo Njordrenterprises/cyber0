@@ -1,112 +1,127 @@
-# Cyber Card System
+# Cyber Project
 
-A hypermedia-driven card system built with Deno, Alpine.js, and HTMX. The architecture follows a server-first approach with minimal client-side JavaScript, leveraging HTMX for dynamic interactions and Alpine.js for lightweight client state management.
+A hypermedia-driven web application using Deno, HTMX, Alpine.js, and Deno KV.
 
 ## Architecture
 
-### Core Components
+This project uses a modular card-based architecture where:
 
-1. **Shell (`main.html`)**
-   - Application entry point
-   - Loads Alpine.js and HTMX
-   - Provides base layout structure
+1. The application shell (index.html) uses HTMX to load views
+2. Views are composed of reusable cards
+3. Each card is a self-contained module with:
+   - Base functionality from cards.ts
+   - Card-specific implementation
+   - Alpine.js component integration
+   - Real-time KV store connection
 
-2. **Card System**
-   - Each card is a self-contained module
-   - Includes TypeScript logic, HTML template, and scoped CSS
-   - Manages its own state through Deno KV
-   - Real-time updates via KV watch
+### Data Flow
 
-3. **State Management**
-   - Server-side state in Deno KV
-   - Client-side reactivity with Alpine.js
-   - Real-time sync using Deno KV watch
-
-### Directory Structure
-
+```plaintext
+User Input -> Alpine.js Component -> Card API -> Base Card -> KV Store
+     ↑                                                          |
+     └─────────────── KV Watch Events ────────────────────────┘
 ```
+
+## Technology Stack
+
+- **Deno**: Runtime and KV store
+- **HTMX**: View swapping and server interaction
+- **Alpine.js**: Card-level interactivity
+- **TypeScript**: Type-safe card implementations
+
+## Project Structure
+
+```plaintext
 /
 ├── src/
 │   ├── cards/              # Card modules
-│   │   ├── cards.ts        # Base card class
-│   │   ├── cards.css       # Shared card styles
+│   │   ├── cards.ts        # Base card class + KV operations
 │   │   └── [card-name]/    # Individual cards
-│   └── js/                 # Client-side libraries
-├── main.html              # Application shell
-├── main.css              # Global styles
-├── main.ts               # Deno server
-└── deno.json             # Deno configuration
+│   │       ├── [card-name].ts   # Implementation + Alpine.js
+│   │       ├── [card-name].css  # Card styles
+│   │       └── [card-name].html # Card template
+│   ├── js/                 # Client libraries
+│   └── views/              # HTMX views
+├── main.ts                # Server routing
+└── index.html            # App shell
 ```
 
 ## Development
 
-### Prerequisites
-
-- Deno 1.40 or later
-
-### Setup
-
-1. Clone the repository
-2. Install dependencies:
+1. Install Deno
+2. Clone the repository
+3. Run the server:
    ```bash
-   deno cache --reload main.ts
+   deno task dev
    ```
 
-### Development Server
+## Creating a New Card
 
-Run the development server:
+1. Create a new directory in `src/cards/[card-name]/`
+2. Create the required files:
+   - `[card-name].ts`: Card implementation and Alpine.js component
+   - `[card-name].html`: Card template
+   - `[card-name].css`: Card-specific styles
 
-```bash
-deno task serve
+Example card implementation:
+
+```typescript
+// src/cards/example/example.ts
+import { Card, CardKvEntry, CardState } from "../cards.ts";
+
+// Card-specific interfaces
+export interface ExampleState extends CardState {
+  message: string;
+}
+
+export interface ExampleKvEntry extends CardKvEntry {
+  message: string;
+}
+
+// Card implementation
+class ExampleCard extends Card<ExampleState, ExampleKvEntry> {
+  // Card-specific methods
+  public async loadCardMessages(): Promise<string[]> {
+    await this.loadMessages();
+    return this.messages;
+  }
+}
+
+const exampleCard = new ExampleCard("example");
+
+// Alpine.js component registration
+document.addEventListener("alpine:init", () => {
+  const component = {
+    // Component implementation
+    async init() {
+      // Initialize with card
+    },
+  };
+
+  globalThis.Alpine.data("exampleCard", () => component);
+});
+
+export default exampleCard;
 ```
 
-The server will start at `http://localhost:8000` with:
+Example template:
 
-- Hot module reloading
-- KV store for state management
-- Static file serving
+```html
+<!-- src/cards/example/example.html -->
+<div class="card example-card" x-data="exampleCard" x-init="init">
+  <!-- Card template -->
+</div>
+```
 
-## Creating New Cards
+## Server Endpoints
 
-1. Create a new directory under `src/cards/[card-name]/`
-2. Create required files:
-   - `[card-name].ts`: Card logic and state management
-   - `[card-name].html`: Card template
-3. Follow the card module requirements from `.cursorrules`
+- Views: `GET /views/[view-name]`
+- Cards: `GET /cards/[card-name]/template`
+- KV Operations:
+  - `POST /kv/get`
+  - `POST /kv/set`
+  - `GET /kv/watch`
 
-## API Endpoints
+## License
 
-- `GET /api/cards/[card-name]/template`: Get card HTML template
-- `GET /api/cards/[card-name]/state`: Get card state
-- `POST /api/cards/[card-name]/[action]`: Perform card action
-- `PUT /api/cards/[card-name]/[property]`: Update card property
-
-## Technology Stack
-
-- **Deno**: Runtime and server
-- **Alpine.js**: Client-side reactivity
-- **HTMX**: Hypermedia-driven interactions
-- **Deno KV**: State management
-- **TypeScript**: Type safety and developer experience
-
-## Best Practices
-
-1. **Server-First Approach**
-   - Use server-side rendering
-   - Minimize client-side JavaScript
-   - Leverage hypermedia controls
-
-2. **State Management**
-   - Use structured KV keys
-   - Implement atomic updates
-   - Handle real-time sync
-
-3. **Performance**
-   - Optimize KV queries
-   - Use efficient DOM updates
-   - Implement proper caching
-
-4. **Security**
-   - Validate all inputs
-   - Sanitize state data
-   - Implement proper access controls
+MIT

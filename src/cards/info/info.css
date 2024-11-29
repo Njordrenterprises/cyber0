@@ -24,10 +24,32 @@
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.info-card form {
+.info-card h2 {
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: var(--spacing-md);
+}
+
+.info-card .message-container {
   display: flex;
+  flex-direction: column;
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
+  flex: 1;
+  overflow-y: auto;
+}
+
+.info-card .message {
+  background: rgba(255, 255, 255, 0.1);
+  padding: var(--spacing-sm);
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.info-card .input-container {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: auto;
 }
 
 .info-card input {

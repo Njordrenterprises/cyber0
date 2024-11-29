@@ -6,126 +6,76 @@
 /
 ├── src/
 │   ├── cards/              # Card modules directory
-│   │   ├── cards.ts        # Base card class
+│   │   ├── cards.ts        # Base card class + KV operations
 │   │   ├── cards.css       # Shared card styles
 │   │   └── [card-name]/    # Individual card directories
-│   │       ├── [card-name].ts   # Card's Alpine.js module + KV logic
+│   │       ├── [card-name].ts   # Card implementation + Alpine.js component
+│   │       ├── [card-name].css  # Card-specific styles
 │   │       └── [card-name].html # Card template
 │   ├── js/                 # Client-side libraries
 │   └── views/              # View templates
-├── main.css               # Global styles
-└── main.html             # Application shell
+├── main.ts                # Server entry point (routing only)
+└── index.html            # Application shell
 ```
 
-## Card Module Requirements
+## Module Responsibilities
 
-### 1. TypeScript Module (`[card-name].ts`)
+### 1. Base Card Module (cards.ts)
 
-Must extend base Card class and export:
+Must contain:
 
-- Default instance with unique `id`
-- Typed state interface extending `CardState`
-- Typed KV entry interface extending `CardKvEntry`
-- Override `loadInitialState()` for KV initialization
-- Override `getState()` for state exposure
-- Implement card-specific methods
+- Base Card class with KV operations
+- Common interfaces (CardState, CardKvEntry)
+- KV endpoint handlers (get, set, watch)
+- Card template serving
+- Type declarations for KV operations
 
-### 2. HTML Template (`[card-name].html`)
+### 2. Card Implementation Module ([card-name].ts)
+
+Must contain:
+
+- Card-specific state interface extending CardState
+- Card-specific KV entry interface extending CardKvEntry
+- Card class extending base Card
+- Alpine.js component registration
+- Public API methods for Alpine.js interaction
+
+### 3. Card Template ([card-name].html)
 
 Must include:
 
 - `class="card [card-name]-card"` - Card class naming
-- `x-data="[card-name]"` - Alpine.js binding
-- `x-init="await init($kv, $userId)"` - KV initialization
-- `hx-swap-oob="true"` - HTMX swap support
+- `x-data="[card-name]Card"` - Alpine.js binding
+- `x-init="init"` - Component initialization
 
-### 3. CSS Inheritance
+## Data Flow Rules
 
-Cards inherit styles from:
+### 1. KV Operations
 
-1. `main.css` - Global typography and variables
-2. `cards.css` - Base card styles
-   Individual card styles should only override when necessary
+- All KV operations must go through base Card class
+- Use structured keys: `['cards', cardId, userId, ...rest]`
+- Handle watch events for real-time updates
+- Maintain atomic updates with timestamps
 
-## State Management Rules
+### 2. Component Integration
 
-### KV Operations
+- Card modules expose public API for Alpine.js
+- Components use public API only, never direct KV access
+- Watch KV updates through EventSource
+- Handle cleanup in destroy()
 
-1. Use structured keys: `['cards', cardId, userId]`
-2. Watch for KV changes using `kv.watch()`
-3. Handle watch errors and reconnection
-4. Use atomic updates with timestamps
+### 3. State Management
 
-### Alpine.js Integration
+- Base state defined in CardState interface
+- Card-specific state extends base state
+- State updates trigger UI updates via Alpine.js
+- KV watch triggers state reloads
 
-1. Export reactive data properties
-2. Use async initialization
-3. Handle cleanup in destroy()
-4. Maintain type safety
+## Server Endpoints
 
-### HTMX Integration
-
-1. Use proper swap strategies
-2. Handle loading states
-3. Manage error states
-4. Support partial updates
-
-## API Endpoints
-
-- Templates: `GET /api/cards/[card-name]/template`
-- State: `GET /api/cards/[card-name]/state`
-- Actions: `POST /api/cards/[card-name]/[action]`
-- Updates: `PUT /api/cards/[card-name]/[property]`
-
-## Development Guidelines
-
-### Local Development
-
-1. Use `deno task serve` for server
-2. Use Vite for client-side development when needed
-3. Keep client-side JavaScript minimal
-4. Follow hypermedia-driven approach
-
-### Type Safety
-
-1. Use TypeScript for all modules
-2. Define proper interfaces
-3. Maintain strict type checking
-4. Document type constraints
-
-### Performance
-
-1. Optimize KV queries
-2. Use efficient DOM updates
-3. Implement proper caching
-4. Lazy load when appropriate
-
-### Security
-
-1. Validate all inputs
-2. Sanitize state data
-3. Implement proper access controls
-4. Handle errors gracefully
-
-## Testing Strategy
-
-### Unit Tests
-
-1. Test card logic
-2. Test KV operations
-3. Test state management
-4. Test type safety
-
-### Integration Tests
-
-1. Test API endpoints
-2. Test KV watch functionality
-3. Test HTMX interactions
-4. Test Alpine.js reactivity
-
-### Performance Tests
-
-1. Measure KV operation speed
-2. Test DOM update efficiency
-3. Monitor memory usage
-4. Check network payload size
+1. Views: `GET /views/[view-name]`
+2. Cards: `GET /cards/[card-name]/template`
+3. KV Operations:
+   - `POST /kv/get`
+   - `POST /kv/set`
+   - `GET /kv/watch`
