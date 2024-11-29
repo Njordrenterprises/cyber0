@@ -2,10 +2,13 @@ import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
 import infoCard from "./src/cards/info/info.ts";
 import * as db from "./db/kv.ts";
 import { createCard, deleteCard, getCards, addMessage, deleteMessage } from "./src/cards/cards.ts";
-import { addClient, broadcast } from "./src/ws/broadcast.ts";
+import { broadcast, initBroadcast } from "./src/ws/broadcast.ts";
 
 // Initialize KV database
 await db.initKv();
+
+// Initialize broadcast channel
+await initBroadcast();
 
 // Initialize cards
 console.log('Initializing cards...');
@@ -33,28 +36,33 @@ async function loadCardTemplate(name: string): Promise<string> {
   }
 }
 
-// Request handler
 async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   console.log(`${req.method} ${url.pathname}`);
 
-  // Handle WebSocket upgrade
-  if (url.pathname === '/ws') {
-    if (req.headers.get("upgrade") !== "websocket") {
-      return new Response(null, { status: 501 });
-    }
-    const { socket, response } = Deno.upgradeWebSocket(req);
-    
-    // Add client to broadcast system
-    addClient(socket);
-    
-    socket.onmessage = (e) => {
-      console.log('WebSocket message received:', e.data);
-      // Echo message to all clients
-      broadcast(JSON.parse(e.data));
-    };
-    
-    return response;
+  // Create SSE endpoint for real-time updates
+  if (url.pathname === '/events') {
+    const channel = new BroadcastChannel("cyber-updates");
+    const stream = new ReadableStream({
+      start(controller) {
+        channel.onmessage = (event) => {
+          const encoder = new TextEncoder();
+          const data = encoder.encode(`data: ${JSON.stringify(event.data)}\n\n`);
+          controller.enqueue(data);
+        };
+      },
+      cancel() {
+        channel.close();
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      }
+    });
   }
 
   // Handle KV operations
@@ -63,15 +71,12 @@ async function handler(req: Request): Promise<Response> {
   }
   if (url.pathname === '/kv/set' && req.method === 'POST') {
     try {
-      // Read the body once
       const body = await req.json();
-      // Handle the KV set
       const response = await db.handleKvSet(new Request(req.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       }));
-      // Broadcast the update
       await broadcast({ type: 'update', key: body.key, value: body.value });
       return response;
     } catch (error) {
