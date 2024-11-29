@@ -1,4 +1,4 @@
-import { Card, CardState, CardKvEntry } from '../cards.ts';
+import { Card, CardState, CardKvEntry, deleteCard } from '../cards.ts';
 import type { CardMessage } from '../../../db/client/types.ts';
 
 export interface InfoState extends CardState {

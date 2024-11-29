@@ -114,11 +114,20 @@ export async function addMessage(userId: string, type: string, cardId: string, t
 
 export async function deleteMessage(userId: string, type: string, cardId: string, messageId: string): Promise<void> {
   const key = ['cards', type, userId, cardId];
+  console.log('Deleting message:', { userId, type, cardId, messageId });
+  console.log('Using KV key:', key);
   const kv = getKv();
   
   // Get current entry
   const result = await kv.get<CardEntry>(key);
-  if (!result.value) return;
+  console.log('Current entry from KV:', result?.value);
+  if (!result.value) {
+    console.log('No entry found in KV');
+    return;
+  }
+  
+  // Log original messages
+  console.log('Original messages:', result.value.messages);
   
   // Update messages
   const updatedEntry: CardEntry = {
@@ -126,12 +135,18 @@ export async function deleteMessage(userId: string, type: string, cardId: string
     messages: result.value.messages.filter(m => m.id !== messageId),
     timestamp: Date.now()
   };
+  console.log('Filtered messages:', updatedEntry.messages);
   
   // Save and broadcast
+  console.log('Setting KV with updated entry');
   await kv.set(key, updatedEntry);
+  console.log('KV set complete');
+  
+  console.log('Broadcasting update');
   await broadcast({
     type: 'update',
     key: key.join(','),
     value: updatedEntry
   });
+  console.log('Delete operation complete, broadcast sent');
 }

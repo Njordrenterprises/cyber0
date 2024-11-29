@@ -26,11 +26,11 @@
                    // Handle card list updates
                    console.log('Updating card list');
                    this.cards = data.value.sort((a, b) => b.created - a.created);
-                 } else {
+                 } else if (data.value.messages !== undefined) {
                    // Handle message updates
-                   console.log('Dispatching message update for card:', cardId);
+                   console.log('Dispatching message update for card:', cardId, data.value.messages);
                    window.dispatchEvent(new CustomEvent(`card-messages-${cardId}`, {
-                     detail: data.value.messages.sort((a, b) => b.timestamp - a.timestamp)
+                     detail: [...data.value.messages].sort((a, b) => b.timestamp - a.timestamp)
                    }));
                  }
                }
@@ -87,13 +87,16 @@
                await this.refreshMessages();
                
                // Listen for WebSocket updates
-               window.addEventListener(`card-messages-${card.id}`, (e) => {
+               this.handleMessageUpdate = (e) => {
                  console.log('Received message update for card:', card.id, e.detail);
                  this.messages = [...e.detail];
-               });
+               };
+               window.addEventListener(`card-messages-${card.id}`, this.handleMessageUpdate);
              },
              async destroy() {
-               window.removeEventListener(`card-messages-${card.id}`, null);
+               if (this.handleMessageUpdate) {
+                 window.removeEventListener(`card-messages-${card.id}`, this.handleMessageUpdate);
+               }
              },
              async refreshMessages() {
                const messages = await this.cardData.loadCardMessages(card.id);
@@ -120,7 +123,6 @@
                }
                try {
                  await this.cardData.handleKvDelete(card.id, messageId);
-                 await this.refreshMessages();
                } catch (error) {
                  console.error('Error deleting message:', error);
                }
@@ -148,7 +150,7 @@
                 <div class="message-text" x-text="message.text"></div>
                 <div class="message-meta">
                   <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
-                  <button class="delete-btn" @click="handleDelete(message.id).then(() => refreshMessages())">×</button>
+                  <button class="delete-btn" @click="handleDelete(message.id)">×</button>
                 </div>
               </div>
             </template>
