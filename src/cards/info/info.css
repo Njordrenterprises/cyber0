@@ -17,39 +17,30 @@
 .info-card {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
   color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.info-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: var(--spacing-md);
 }
 
 .info-card h1 {
   color: white;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.info-card h2 {
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  margin-bottom: var(--spacing-md);
-}
-
-.info-card .message-container {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-md);
-  flex: 1;
-  overflow-y: auto;
-}
-
-.info-card .message {
-  background: rgba(255, 255, 255, 0.1);
-  padding: var(--spacing-sm);
-  border-radius: 4px;
-  word-break: break-word;
+  margin: 0;
 }
 
 .info-card .input-container {
   display: flex;
   gap: var(--spacing-sm);
-  margin-top: auto;
+  padding: var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin-bottom: var(--spacing-sm);
 }
 
 .info-card input {
@@ -57,8 +48,9 @@
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 1rem;
 }
 
 .info-card input::placeholder {
@@ -75,10 +67,11 @@
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
   color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-weight: 500;
 }
 
 .info-card .submit-btn:hover {
@@ -89,15 +82,72 @@
   transform: translateY(1px);
 }
 
-.info-card .message-display {
-  background: rgba(0, 0, 0, 0.1);
-  padding: 1rem;
-  border-radius: 4px;
-  margin-top: var(--spacing-md);
+.info-card .message-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding-right: var(--spacing-sm);
 }
 
-.info-card .message-display p {
-  margin: 0;
-  color: white;
+.info-card .message {
+  background: rgba(255, 255, 255, 0.1);
+  padding: var(--spacing-md);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.info-card .message:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.info-card .message-text {
+  margin-bottom: var(--spacing-xs);
+  line-height: 1.5;
   word-break: break-word;
+}
+
+.info-card .message-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.info-card .delete-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.info-card .delete-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Scrollbar styles */
+.info-card .message-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.info-card .message-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.info-card .message-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.info-card .message-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
