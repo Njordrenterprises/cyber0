@@ -70,18 +70,23 @@ class InfoCard extends Card<InfoState, InfoKvEntry> {
     if (!entry) return;
 
     const messages = entry.messages.filter((m: CardMessage) => m.id !== messageId);
-    await this.setCardEntry(cardId, {
+    const updatedEntry = {
       ...entry,
       messages,
       timestamp: Date.now()
-    });
+    };
+    
+    await this.setCardEntry(cardId, updatedEntry);
+    return updatedEntry;
   }
 
   async loadCardMessages(cardId: string): Promise<CardMessage[]> {
     console.log('Loading messages for card:', cardId);
     const entry = await this.getCardEntry<InfoKvEntry>(cardId);
     console.log('Loaded entry:', entry);
-    return entry?.messages || [];
+    if (!entry?.messages) return [];
+    // Sort messages by timestamp, newest first
+    return entry.messages.sort((a, b) => b.timestamp - a.timestamp);
   }
 
   // Method to expose Alpine.js methods
@@ -89,7 +94,11 @@ class InfoCard extends Card<InfoState, InfoKvEntry> {
     return {
       handleKvUpdate: this.handleKvUpdate.bind(this),
       handleKvDelete: this.handleKvDelete.bind(this),
-      loadCardMessages: this.loadCardMessages.bind(this)
+      loadCardMessages: this.loadCardMessages.bind(this),
+      deleteCard: async (cardId: string) => {
+        console.log('Deleting card:', cardId);
+        await deleteCard(this.userId, cardId, this.id);
+      }
     };
   }
 }

@@ -65,9 +65,8 @@ export async function addCardMessage(userId: string, cardId: string, text: strin
     timestamp: Date.now()
   };
 
-  messages.push(message);
   await setValue(key, {
-    messages,
+    messages: [message, ...messages],
     cardId,
     timestamp: Date.now()
   });
@@ -103,13 +102,45 @@ export async function handleKvGet(req: Request): Promise<Response> {
 }
 
 export async function handleKvSet(req: Request): Promise<Response> {
-  const { key, value } = await req.json();
-  if (!key || !value) {
-    return new Response('Missing key or value', { status: 400 });
+  try {
+    const { key, value } = await req.json();
+    if (!key || !value) {
+      return new Response('Missing key or value', { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const keyArr = parseKey(key);
+    
+    // If this is a card entry, preserve existing messages
+    if (keyArr[0] === 'cards' && value.messages) {
+      const existingEntry = await getValue<CardEntry>(keyArr);
+      if (existingEntry) {
+        // Merge new messages with existing ones, keeping newest first
+        const allMessages = [...(value.messages || []), ...(existingEntry.messages || [])];
+        // Remove duplicates based on id
+        const uniqueMessages = allMessages.filter((message, index, self) =>
+          index === self.findIndex((m) => m.id === message.id)
+        );
+        // Update the value with merged messages
+        value.messages = uniqueMessages;
+      }
+    }
+    
+    await setValue(keyArr, value);
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    console.error('KV Set Error:', error);
+    return new Response(JSON.stringify({ 
+      error: 'Failed to set value',
+      details: error.message 
+    }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
-  
-  const keyArr = parseKey(key);
-  await setValue(keyArr, value);
-  
-  return new Response('OK');
 }

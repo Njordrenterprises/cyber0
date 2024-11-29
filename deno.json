@@ -4,12 +4,22 @@
     "start": "deno run --unstable-kv --allow-net --allow-read --allow-env main.ts"
   },
   "compilerOptions": {
-    "lib": ["deno.ns", "deno.unstable", "dom", "dom.iterable", "dom.asynciterable"]
+    "lib": [
+      "deno.ns",
+      "deno.unstable",
+      "dom",
+      "dom.iterable",
+      "dom.asynciterable"
+    ]
   },
   "fmt": {
     "files": {
-      "include": ["src/"],
-      "exclude": ["src/js/"]
+      "include": [
+        "src/"
+      ],
+      "exclude": [
+        "src/js/"
+      ]
     },
     "options": {
       "useTabs": false,
@@ -21,12 +31,28 @@
   },
   "lint": {
     "files": {
-      "include": ["src/"],
-      "exclude": ["src/js/"]
+      "include": [
+        "src/"
+      ],
+      "exclude": [
+        "src/js/"
+      ]
     },
     "rules": {
-      "tags": ["recommended"],
-      "exclude": ["no-explicit-any"]
+      "tags": [
+        "recommended"
+      ],
+      "exclude": [
+        "no-explicit-any"
+      ]
     }
+  },
+  "deploy": {
+    "project": "88a90651-8d0a-4669-908f-b015f9d6e46c",
+    "exclude": [
+      "**/node_modules"
+    ],
+    "include": [],
+    "entrypoint": "main.ts"
   }
 }

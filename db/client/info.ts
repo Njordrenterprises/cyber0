@@ -21,17 +21,31 @@ export function getInfoCardMethods(): InfoCardMethods {
     userId: 'test-user',
     handleKvUpdate: async (cardId: string, newMessage: string) => {
       const key = ['cards', 'info', 'test-user', cardId];
-      let entry = await getCardData().info.kv.get<CardEntry>(key);
-      if (!entry) {
-        entry = { messages: [], cardId, timestamp: Date.now() };
+      
+      try {
+        // Get current entry atomically
+        const entry = await getCardData().info.kv.get<CardEntry>(key);
+        
+        // Prepare new entry
+        const message: CardMessage = {
+          id: generateUUID(),
+          text: newMessage,
+          timestamp: Date.now()
+        };
+        
+        // Create or update entry with new message at start
+        const updatedEntry: CardEntry = {
+          messages: [message, ...(entry?.messages || [])],
+          cardId,
+          timestamp: Date.now()
+        };
+        
+        // Set atomically
+        await getCardData().info.kv.set(key, updatedEntry);
+      } catch (error) {
+        console.error('Error in handleKvUpdate:', error);
+        throw error;
       }
-      const message: CardMessage = {
-        id: generateUUID(),
-        text: newMessage,
-        timestamp: Date.now()
-      };
-      entry.messages.push(message);
-      await getCardData().info.kv.set(key, entry);
     },
     handleKvDelete: async (cardId: string, messageId: string) => {
       const key = ['cards', 'info', 'test-user', cardId];
@@ -100,17 +114,32 @@ export function getInfoCardScript(): string {
       userId: 'test-user',
       handleKvUpdate: async (cardId, newMessage) => {
         const key = ['cards', 'info', 'test-user', cardId];
-        let entry = await kv.get(key);
-        if (!entry) {
-          entry = { messages: [], cardId, timestamp: Date.now() };
+        
+        try {
+          // Get current entry atomically
+          let entry = await kv.get(key);
+          
+          // Prepare new entry
+          const message = {
+            id: generateUUID(),
+            text: newMessage,
+            timestamp: Date.now()
+          };
+          
+          // Create or update entry with new message at start
+          const updatedEntry = {
+            messages: [message, ...(entry?.messages || [])],
+            cardId,
+            timestamp: Date.now()
+          };
+          
+          // Set atomically
+          await kv.set(key, updatedEntry);
+          return updatedEntry; // Return the updated entry for immediate UI update
+        } catch (error) {
+          console.error('Error in handleKvUpdate:', error);
+          throw error;
         }
-        const message = {
-          id: generateUUID(),
-          text: newMessage,
-          timestamp: Date.now()
-        };
-        entry.messages.push(message);
-        await kv.set(key, entry);
       },
       handleKvDelete: async (cardId, messageId) => {
         const key = ['cards', 'info', 'test-user', cardId];

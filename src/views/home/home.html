@@ -8,6 +8,34 @@
          }
          // Load cards
          await this.loadCards();
+         
+         // Set up WebSocket if not already connected
+         if (!window.cardSocket) {
+           const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+           window.cardSocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+           
+           window.cardSocket.onmessage = async (event) => {
+             try {
+               const data = JSON.parse(event.data);
+               console.log('WebSocket message received:', data);
+               if (data.type === 'update') {
+                 const keyParts = data.key.split(',');
+                 const [, type, userId, list] = keyParts;
+                 if (list === 'list') {
+                   console.log('Updating card list');
+                   this.cards = data.value.sort((a, b) => b.created - a.created);
+                 }
+               }
+             } catch (error) {
+               console.error('Error handling WebSocket message:', error);
+             }
+           };
+
+           window.cardSocket.onclose = () => {
+             console.log('WebSocket closed, attempting to reconnect...');
+             setTimeout(() => this.init(), 1000);
+           };
+         }
        },
        async loadCards() {
          const fetchedCards = await window.cardData.info.getCards();
@@ -38,22 +66,84 @@
            x-data="{ 
              messages: [],
              inputValue: '',
+             socket: null,
+             cardData: null,
              async init() {
-               this.messages = await window.cardData.info.loadCardMessages(card.id);
+               console.log('Initializing card:', card.id);
+               // Wait for cardData to be available
+               while (!window.cardData?.info) {
+                 await new Promise(resolve => setTimeout(resolve, 100));
+               }
+               this.cardData = window.cardData.info;
+               
+               // Load initial messages
+               await this.refreshMessages();
+               
+               // Set up WebSocket if not already connected
+               if (!window.cardSocket) {
+                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                 window.cardSocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+                 
+                 window.cardSocket.onmessage = async (event) => {
+                   try {
+                     const data = JSON.parse(event.data);
+                     console.log('WebSocket message received:', data);
+                     if (data.type === 'update') {
+                       const keyParts = data.key.split(',');
+                       const [, , , cardId] = keyParts;
+                       if (cardId === card.id) {
+                         console.log('Updating messages for card:', cardId);
+                         // Force a fresh load from KV to ensure consistency
+                         await this.refreshMessages();
+                       }
+                     }
+                   } catch (error) {
+                     console.error('Error handling WebSocket message:', error);
+                   }
+                 };
+
+                 window.cardSocket.onclose = () => {
+                   console.log('WebSocket closed, attempting to reconnect...');
+                   setTimeout(() => this.init(), 1000);
+                 };
+               }
+             },
+             async destroy() {
+               // Don't close shared socket
+             },
+             async refreshMessages() {
+               const messages = await this.cardData.loadCardMessages(card.id);
+               this.messages = messages;
              },
              async submitMessage() {
                if (!this.inputValue.trim()) return;
-               await window.cardData.info.handleKvUpdate(card.id, this.inputValue);
-               this.inputValue = '';
-               this.messages = await window.cardData.info.loadCardMessages(card.id);
+               if (!this.cardData) {
+                 console.error('Card data not initialized');
+                 return;
+               }
+               try {
+                 await this.cardData.handleKvUpdate(card.id, this.inputValue);
+                 this.inputValue = '';
+               } catch (error) {
+                 console.error('Error submitting message:', error);
+               }
              },
-             async deleteMessage(messageId) {
-               await window.cardData.info.handleKvDelete(card.id, messageId);
-               this.messages = await window.cardData.info.loadCardMessages(card.id);
+             async handleDelete(messageId) {
+               if (!this.cardData) {
+                 console.error('Card data not initialized');
+                 return;
+               }
+               try {
+                 await this.cardData.handleKvDelete(card.id, messageId);
+                 await this.refreshMessages();
+               } catch (error) {
+                 console.error('Error deleting message:', error);
+               }
              }
            }"
-           x-init="init">
-        <button @click="window.cardData.info.deleteCard(card.id).then(() => $dispatch('refresh-cards'))" 
+           x-init="init"
+           @destroy.window="destroy">
+        <button @click="window.cardData.info.deleteCard(card.id).then(() => { $dispatch('refresh-cards'); window.location.reload(); })" 
                 class="delete-btn">×</button>
         <div class="info-content">
           <div class="card-header">
@@ -73,7 +163,7 @@
                 <div class="message-text" x-text="message.text"></div>
                 <div class="message-meta">
                   <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
-                  <button class="delete-btn" @click="deleteMessage(message.id)">×</button>
+                  <button class="delete-btn" @click="handleDelete(message.id).then(() => refreshMessages())">×</button>
                 </div>
               </div>
             </template>
