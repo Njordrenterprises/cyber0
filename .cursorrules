@@ -1,101 +1,157 @@
-# Card-Based Architecture System Rules
+# Project Understanding Guide for Cursor IDE
 
-## Card Module Structure
+## Project Overview
 
-Every card MUST follow this exact structure:
+This is a Deno-based hypermedia web application using Hono, HTMX, and Deno KV. The architecture follows a server-first approach with minimal client-side JavaScript, leveraging WebSockets for real-time updates and Alpine.js for lightweight client state management.
 
-### 1. Server-Side Card Class
+## Core Architecture
+
+### Card-Based System
+
+Every card in the system follows this exact structure:
+
+1. Server-Side Card Class (src/cards/[card-name]/[card-name].ts)
+2. Client-Side Methods (db/client/[card-name].ts)
+3. HTML Template (src/cards/[card-name]/[card-name].html)
+4. CSS Styles (src/cards/[card-name]/[card-name].css)
+
+### Real-Time Updates
+
+- WebSocket server in main.ts
+- Centralized broadcast system in src/ws/broadcast.ts
+- Client-side WebSocket handling in home.html
+- Event-based message passing for real-time UI updates
+
+### Data Flow
+
+1. Client makes request (HTTP or WebSocket)
+2. Server processes in main.ts
+3. Operation handled by card-specific code
+4. KV store updated
+5. WebSocket broadcast sent
+6. All clients receive update
+7. UI automatically refreshes
+
+## Card Operations
+
+### Creating a Card
+
+```bash
+# Create a new card
+curl -X POST -H "Content-Type: application/json" \\
+     -d '{"name":"Card Name"}' \\
+     http://0.0.0.0:8000/cards/info/create
+```
+
+### Reading Card Data
+
+```bash
+# Get card messages
+curl "http://0.0.0.0:8000/kv/get?key=cards,info,test-user,CARD_ID"
+```
+
+### Adding Messages
+
+```bash
+# Send a message to a card
+curl -X POST -H "Content-Type: application/json" \\
+     -d '{"cardId":"CARD_ID", "text":"Message Text"}' \\
+     http://0.0.0.0:8000/cards/info/message/add
+```
+
+### Deleting Messages
+
+```bash
+# Delete a specific message
+curl -X POST -H "Content-Type: application/json" \\
+     -d '{"cardId":"CARD_ID", "messageId":"MESSAGE_ID"}' \\
+     http://0.0.0.0:8000/cards/info/message/delete
+```
+
+### Deleting Cards
+
+```bash
+# Delete an entire card
+curl -X POST -H "Content-Type: application/json" \\
+     -d '{"cardId":"CARD_ID"}' \\
+     http://0.0.0.0:8000/cards/info/delete
+```
+
+## WebSocket Events
+
+### Message Format
 
 ```typescript
-// src/cards/[card-name]/[card-name].ts
+interface WebSocketMessage {
+  type: "update";
+  key: string; // Comma-separated key parts
+  value: unknown; // The updated data
+}
+```
+
+### Event Types
+
+1. Card List Updates (key ends with 'list')
+2. Message Updates (key contains cardId)
+
+## Creating New Card Types
+
+1. Create the directory structure:
+
+```
+src/cards/[card-name]/
+├── [card-name].ts    # Server-side card class
+├── [card-name].html  # Card template
+└── [card-name].css   # Card styles
+```
+
+2. Create the server-side card class:
+
+```typescript
 import { Card, CardState, CardKvEntry } from '../cards.ts';
-import type { CardMessage } from '../../../db/client/types.ts';
 
 export interface [CardName]State extends CardState {
   // Card-specific state
 }
 
-export interface [CardName]KvEntry extends CardKvEntry {
-  // Card-specific KV entry data
-}
-
-class [CardName]Card extends Card<[CardName]State, [CardName]KvEntry> {
-  // Required overrides
+class [CardName]Card extends Card<[CardName]State> {
   protected override async loadInitialState(): Promise<void> {
-    const entry = await this.getKvEntry();
-    if (entry) {
-      // Initialize card state from KV
-    }
+    // Initialize card state
   }
 
   override getState(): [CardName]State {
-    return {
-      ...super.getState(),
-      // Return card-specific state
-    };
+    // Return card state
   }
 
   protected override getKvKey(): Deno.KvKey {
     return ['cards', this.id, this.userId];
   }
 
-  // Alpine.js methods
   getAlpineMethods() {
     return {
       // Expose methods for client-side use
     };
   }
 }
-
-const [cardName]Card = new [CardName]Card('[card-name]');
-export default [cardName]Card;
 ```
 
-### 2. Client-Side Methods
+3. Add client-side methods in db/client/[card-name].ts:
 
 ```typescript
-// db/client/[card-name].ts
-import type { [CardName]Methods } from './types.ts';
-import { getCardData } from './types.ts';
-
 export function get[CardName]Methods(): [CardName]Methods {
   return {
-    kv: {
-      get: async <T>(key: unknown[]) => {
-        const response = await fetch(`/kv/get?key=${key.join(',')}`);
-        return await response.json() as T | null;
-      },
-      set: async (key: unknown[], value: unknown) => {
-        await fetch('/kv/set', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: key.join(','), value })
-        });
-      }
-    },
-    // Card-specific client methods that use getCardData() for cross-platform access
+    // Card-specific client methods
   };
-}
-
-export function get[CardName]Script(): string {
-  return `
-    globalThis.cardData = globalThis.cardData || {};
-    globalThis.cardData.[cardName] = globalThis.cardData.[cardName] || ${JSON.stringify(get[CardName]Methods())};
-  `;
 }
 ```
 
-### 3. HTML Template
+4. Create HTML template with Alpine.js bindings:
 
 ```html
-<!-- src/cards/[card-name]/[card-name].html -->
 <div
   class="card [card-name]-card"
   x-data="{ 
-       cardData: window.cardData.[cardName],
-       async init() {
-         // Initialize card data
-       }
+       // Card-specific data
      }"
   x-init="init"
 >
@@ -103,99 +159,24 @@ export function get[CardName]Script(): string {
 </div>
 ```
 
-### 4. CSS Styles
-
-```css
-/* src/cards/[card-name]/[card-name].css */
-.[card-name]-card {
-  /* Card-specific styles */
-}
-```
-
-## Cross-Platform Data Access
-
-1. Types:
-
-```typescript
-declare global {
-  interface Window extends Record<string, unknown> {
-    cardData: CardData;
-  }
-  var cardData: CardData;
-}
-```
-
-2. Access Helper:
-
-```typescript
-export const getCardData = (): CardData => {
-  if (typeof window !== "undefined") {
-    return (window as Window).cardData;
-  }
-  return globalThis.cardData;
-};
-```
-
-## Initialization Rules
-
-1. Server-Side:
-   - Card class MUST extend base `Card`
-   - MUST implement required overrides
-   - MUST export singleton instance
-
-2. Client-Side:
-   - MUST use Alpine.js for state management
-   - MUST use `window.cardData.[cardName]` in templates
-   - MUST use `getCardData()` in TypeScript code
-   - MUST handle cleanup in destroy()
-
-3. Styling:
-   - MUST use scoped class names
-   - MUST follow shared style variables
-   - MUST be responsive
-
-## Data Flow Rules
-
-1. KV Operations:
-   - Use standard KV endpoints
-   - Follow key structure: ['cards', cardId, userId]
-   - Handle errors gracefully
-   - Always use getCardData() for access
-
-2. State Management:
-   - Server maintains source of truth
-   - Client syncs via KV operations
-   - Use EventSource for real-time updates
-
-## API Standards
-
-1. Client Methods:
-   - MUST be async
-   - MUST use shared types
-   - MUST handle errors
-   - MUST use getCardData() for access
-
-2. Server Methods:
-   - MUST be bound in getAlpineMethods()
-   - MUST maintain type safety
-   - MUST validate input
-
 ## Best Practices
 
-1. Type Safety:
-   - Use TypeScript interfaces
-   - Extend base types
-   - Validate all data
-   - Use proper Window/globalThis types
+1. WebSocket Updates:
+   - Use broadcast for all state changes
+   - Include full updated state in broadcasts
+   - Handle reconnection gracefully
 
-2. Error Handling:
-   - Graceful degradation
-   - User feedback
-   - Console logging
-   - Handle both browser and Deno contexts
+2. KV Operations:
+   - Use atomic operations when possible
+   - Include timestamps for ordering
+   - Handle missing data gracefully
 
-3. Performance:
-   - Minimize KV operations
-   - Batch updates when possible
-   - Clean up resources
-   - Cache cardData access when appropriate
+3. UI Updates:
+   - Use Alpine.js for reactivity
+   - Spread arrays to trigger updates
+   - Clean up event listeners
+
+4. Error Handling:
+   - Log errors on both sides
+   - Provide user feedback
+   - Handle network issues gracefully

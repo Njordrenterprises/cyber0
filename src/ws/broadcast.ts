@@ -6,6 +6,15 @@ export function addClient(ws: WebSocket) {
   clients.add(ws);
   console.log(`WebSocket client connected, total: ${clients.size}`);
   
+  ws.onopen = () => {
+    console.log('WebSocket connection opened');
+  };
+  
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+    clients.delete(ws);
+  };
+  
   ws.onclose = () => {
     clients.delete(ws);
     console.log(`WebSocket client disconnected, remaining: ${clients.size}`);
@@ -21,7 +30,11 @@ export function broadcast(message: unknown) {
   
   for (const client of clients) {
     try {
-      client.send(payload);
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      } else {
+        deadClients.add(client);
+      }
     } catch (err) {
       console.error('Error broadcasting to client:', err);
       deadClients.add(client);
@@ -30,6 +43,7 @@ export function broadcast(message: unknown) {
   
   // Cleanup any dead connections
   for (const client of deadClients) {
+    console.log('Removing dead client');
     clients.delete(client);
   }
 } 

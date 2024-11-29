@@ -11,38 +11,71 @@
          
          // Set up WebSocket if not already connected
          if (!window.cardSocket) {
-           const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-           window.cardSocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-           
-           window.cardSocket.onmessage = async (event) => {
-             try {
-               const data = JSON.parse(event.data);
-               console.log('WebSocket message received:', data);
-               if (data.type === 'update') {
-                 const keyParts = data.key.split(',');
-                 const [, type, userId, cardId] = keyParts;
-                 
-                 if (cardId === 'list') {
-                   // Handle card list updates
-                   console.log('Updating card list');
-                   this.cards = data.value.sort((a, b) => b.created - a.created);
-                 } else if (data.value.messages !== undefined) {
-                   // Handle message updates
-                   console.log('Dispatching message update for card:', cardId, data.value.messages);
-                   window.dispatchEvent(new CustomEvent(`card-messages-${cardId}`, {
-                     detail: [...data.value.messages].sort((a, b) => b.timestamp - a.timestamp)
-                   }));
+           const connectWebSocket = () => {
+             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+             const host = window.location.hostname === 'localhost' || window.location.hostname === '0.0.0.0' 
+               ? `${window.location.hostname}:8000`
+               : 'cyber0.deno.dev';
+             const wsUrl = `${protocol}//${host}/ws`;
+             
+             console.log('Connecting to WebSocket:', wsUrl);
+             
+             const socket = new WebSocket(wsUrl);
+             
+             socket.onopen = () => {
+               console.log('WebSocket connection established');
+               window.cardSocket = socket;
+             };
+             
+             socket.onerror = (error) => {
+               console.error('WebSocket error:', error);
+               window.cardSocket = null;
+               // Try to reconnect after error
+               setTimeout(connectWebSocket, 2000);
+             };
+             
+             socket.onclose = () => {
+               console.log('WebSocket closed, attempting to reconnect...');
+               window.cardSocket = null;
+               setTimeout(connectWebSocket, 2000);
+             };
+             
+             socket.onmessage = async (event) => {
+               try {
+                 const data = JSON.parse(event.data);
+                 console.log('WebSocket message received:', data);
+                 if (data.type === 'update') {
+                   const keyParts = data.key.split(',');
+                   const [, type, userId, cardId] = keyParts;
+                   
+                   if (cardId === 'list') {
+                     // Handle card list updates
+                     console.log('Updating card list');
+                     this.cards = data.value.sort((a, b) => b.created - a.created);
+                   } else if (data.value.messages !== undefined) {
+                     // Handle message updates
+                     console.log('Dispatching message update for card:', cardId, data.value.messages);
+                     window.dispatchEvent(new CustomEvent(`card-messages-${cardId}`, {
+                       detail: [...data.value.messages].sort((a, b) => b.timestamp - a.timestamp)
+                     }));
+                   }
                  }
+               } catch (error) {
+                 console.error('Error handling WebSocket message:', error);
                }
-             } catch (error) {
-               console.error('Error handling WebSocket message:', error);
+             };
+           };
+           
+           // Initial connection
+           connectWebSocket();
+           
+           // Reconnect on visibility change (mobile devices going to background)
+           document.addEventListener('visibilitychange', () => {
+             if (document.visibilityState === 'visible' && !window.cardSocket) {
+               console.log('Page visible, reconnecting WebSocket...');
+               connectWebSocket();
              }
-           };
-
-           window.cardSocket.onclose = () => {
-             console.log('WebSocket closed, attempting to reconnect...');
-             setTimeout(() => this.init(), 1000);
-           };
+           });
          }
        },
        async loadCards() {

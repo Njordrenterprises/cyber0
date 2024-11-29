@@ -1,202 +1,148 @@
-# Cyber Card System
+# Cyber Framework
 
-A hypermedia-driven card system built with Deno, HTMX, and Alpine.js.
+A real-time, card-based web framework built with Deno, featuring WebSocket-powered live updates and a modern cyberpunk aesthetic.
+
+## Features
+
+- 🚀 Real-time updates across all clients
+- 💾 Persistent storage with Deno KV
+- 🎨 TRON-inspired cyberpunk UI
+- 🔌 WebSocket-based communication
+- 🧩 Modular card-based architecture
+- 🛠 Extensible framework for custom cards
+
+## Quick Start
+
+1. Install Deno:
+
+```bash
+curl -fsSL https://deno.land/x/install/install.sh | sh
+```
+
+2. Clone and run:
+
+```bash
+git clone [repository-url]
+cd cyber-framework
+deno task dev
+```
+
+3. Open http://localhost:8000
+
+## Card Operations
+
+### Create a Card
+
+```bash
+curl -X POST -H "Content-Type: application/json" \\
+     -d '{"name":"My Card"}' \\
+     http://localhost:8000/cards/info/create
+```
+
+### Send a Message
+
+```bash
+curl -X POST -H "Content-Type: application/json" \\
+     -d '{"cardId":"CARD_ID", "text":"Hello World!"}' \\
+     http://localhost:8000/cards/info/message/add
+```
+
+### View Card Messages
+
+```bash
+curl "http://localhost:8000/kv/get?key=cards,info,test-user,CARD_ID"
+```
+
+### Delete a Message
+
+```bash
+curl -X POST -H "Content-Type: application/json" \\
+     -d '{"cardId":"CARD_ID", "messageId":"MESSAGE_ID"}' \\
+     http://localhost:8000/cards/info/message/delete
+```
+
+### Delete a Card
+
+```bash
+curl -X POST -H "Content-Type: application/json" \\
+     -d '{"cardId":"CARD_ID"}' \\
+     http://localhost:8000/cards/info/delete
+```
 
 ## Architecture
 
-The system follows a modular card-based architecture where each card is a self-contained component with:
+The framework uses a modular card-based architecture:
 
-1. Server-side TypeScript class extending base `Card`
-2. Client-side Alpine.js component
-3. Scoped CSS styles
-4. Shared TypeScript interfaces
-5. Cross-platform data access
-
-### Key Components
-
-- `db/card.ts` - Base card class with KV operations
-- `db/kv.ts` - Centralized KV store management
-- `db/client/types.ts` - Shared TypeScript interfaces and cross-platform helpers
-- `db/client/[card-name].ts` - Client-side card methods
-
-## Cross-Platform Data Access
-
-The system uses a unified approach to handle both browser (Alpine.js) and Deno contexts:
-
-```typescript
-// Types that work in both environments
-declare global {
-  interface Window extends Record<string, unknown> {
-    cardData: CardData;
-  }
-  var cardData: CardData;
-}
-
-// Helper to access cardData consistently
-export const getCardData = (): CardData => {
-  if (typeof window !== "undefined") {
-    return (window as Window).cardData;
-  }
-  return globalThis.cardData;
-};
+```
+src/
+├── cards/           # Card implementations
+│   └── info/        # Info card example
+├── ws/              # WebSocket handling
+└── views/           # Page views
 ```
 
-## Creating a New Card
+Each card type follows a consistent structure:
 
-1. Create the card directory:
-   ```bash
-   mkdir -p src/cards/[card-name]
-   ```
+- Server-side TypeScript class
+- Client-side methods
+- HTML template
+- Scoped CSS styles
 
-2. Create the server-side card class (`src/cards/[card-name]/[card-name].ts`):
-   ```typescript
-   import { Card, CardKvEntry, CardState } from "../cards.ts";
+## Real-Time Updates
 
-   export interface MyCardState extends CardState {
-     // Card-specific state
-   }
+All operations are immediately broadcast to all connected clients via WebSockets:
 
-   export interface MyCardKvEntry extends CardKvEntry {
-     // Card-specific KV data
-   }
+1. Client performs action (create/update/delete)
+2. Server processes request
+3. KV store is updated
+4. WebSocket broadcast sent
+5. All clients update automatically
 
-   class MyCard extends Card<MyCardState, MyCardKvEntry> {
-     protected override async loadInitialState(): Promise<void> {
-       const entry = await this.getKvEntry();
-       if (entry) {
-         // Initialize from KV
-       }
-     }
+## Development
 
-     override getState(): MyCardState {
-       return {
-         ...super.getState(),
-         // Return card state
-       };
-     }
+### Create a New Card Type
 
-     protected override getKvKey(): Deno.KvKey {
-       return ["cards", this.id, this.userId];
-     }
+1. Create directory structure:
 
-     getAlpineMethods() {
-       return {
-         // Expose methods for client
-       };
-     }
-   }
-
-   const myCard = new MyCard("my-card");
-   export default myCard;
-   ```
-
-3. Create the client-side methods (`db/client/[card-name].ts`):
-   ```typescript
-   import type { MyCardMethods } from "./types.ts";
-   import { getCardData } from "./types.ts";
-
-   export function getMyCardMethods(): MyCardMethods {
-     return {
-       kv: {
-         get: async <T>(key: unknown[]) => {
-           const response = await fetch(`/kv/get?key=${key.join(",")}`);
-           return await response.json() as T | null;
-         },
-         set: async (key: unknown[], value: unknown) => {
-           await fetch("/kv/set", {
-             method: "POST",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({ key: key.join(","), value }),
-           });
-         },
-       },
-       // Card-specific methods using getCardData()
-     };
-   }
-
-   export function getMyCardScript(): string {
-     return `
-       globalThis.cardData = globalThis.cardData || {};
-       globalThis.cardData.myCard = globalThis.cardData.myCard || ${
-       JSON.stringify(getMyCardMethods())
-     };
-     `;
-   }
-   ```
-
-4. Create the HTML template (`src/cards/[card-name]/[card-name].html`):
-   ```html
-   <div
-     class="card my-card"
-     x-data="{ 
-          cardData: window.cardData.myCard,
-          async init() {
-            // Initialize card
-          }
-        }"
-     x-init="init"
-   >
-     <!-- Card content -->
-   </div>
-   ```
-
-5. Create the CSS styles (`src/cards/[card-name]/[card-name].css`):
-   ```css
-   .my-card {
-     /* Card-specific styles */
-   }
-   ```
-
-## Card API
-
-Each card exposes a standard API through `window.cardData.[cardName]` in the browser and `globalThis.cardData.[cardName]` in Deno:
-
-```typescript
-interface CardData {
-  kv: {
-    get: <T>(key: unknown[]) => Promise<T | null>;
-    set: (key: unknown[], value: unknown) => Promise<void>;
-  };
-  // Card-specific methods
-}
-
-// Access in TypeScript:
-const cardData = getCardData();
-await cardData.myCard.someMethod();
-
-// Access in HTML template:
-x-data="{ cardData: window.cardData.myCard }"
+```bash
+mkdir -p src/cards/my-card
+touch src/cards/my-card/{my-card.ts,my-card.html,my-card.css}
 ```
 
-## Development Standards
+2. Implement the card class:
 
-1. Type Safety
-   - All card state must be typed
-   - Use shared interfaces from `db/client/types.ts`
-   - Validate all data operations
-   - Use proper Window/globalThis types
+```typescript
+// src/cards/my-card/my-card.ts
+import { Card, CardState } from "../cards.ts";
 
-2. State Management
-   - Server is source of truth
-   - Use KV for persistence
-   - Use Alpine.js for UI state
-   - Use getCardData() in TypeScript
+export interface MyCardState extends CardState {
+  // Card-specific state
+}
 
-3. Styling
-   - Use scoped class names
-   - Follow CSS custom properties
-   - Maintain responsive design
+class MyCard extends Card<MyCardState> {
+  // Implementation
+}
 
-## Example Cards
+export default new MyCard("my-card");
+```
 
-### Info Card
+3. Create the template:
 
-A simple message board card that demonstrates:
+```html
+<!-- src/cards/my-card/my-card.html -->
+<div class="card my-card" x-data="{ /* ... */ }">
+  <!-- Card content -->
+</div>
+```
 
-- KV persistence
-- Real-time updates
-- Message CRUD operations
-- Responsive design
-- Cross-platform data access
+## Contributing
 
-See `src/cards/info` for implementation details.
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+MIT License - see LICENSE file for details
