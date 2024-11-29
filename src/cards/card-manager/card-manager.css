@@ -17,109 +17,94 @@
   border-radius: var(--border-radius);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  height: 400px;
+  display: flex;
+  flex-direction: column;
 }
 
-.card-header {
+.info-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.input-container {
   padding: var(--spacing-sm);
-  background: rgba(0, 0, 0, 0.05);
   border-bottom: 1px solid var(--border-color);
+  background: var(--card-bg);
+  display: flex;
+  gap: var(--spacing-sm);
 }
 
-.card-title {
+.input-container input {
+  flex: 1;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--input-bg);
+  color: var(--text-color);
+}
+
+.message-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.message {
+  padding: var(--spacing-sm);
+  background: var(--message-bg, rgba(0, 0, 0, 0.05));
+  border-radius: var(--border-radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.message-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-weight: 500;
+  font-size: 0.8em;
+  color: var(--text-muted);
 }
 
-.card-actions {
-  display: flex;
-  gap: var(--spacing-xs);
+.message-time {
+  font-style: italic;
 }
 
-.card-edit {
-  display: flex;
-  gap: var(--spacing-xs);
+.delete-btn {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  padding: 0 var(--spacing-xs);
+  font-size: 1.2em;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s;
 }
 
-.card-edit input {
-  flex: 1;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--input-bg);
-  color: var(--text-color);
+.delete-btn:hover {
+  opacity: 1;
 }
 
-.edit-actions {
-  display: flex;
-  gap: var(--spacing-xs);
-}
-
-.add-card {
-  display: flex;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--card-bg);
-  border-radius: var(--border-radius);
-  box-shadow: var(--shadow-sm);
-}
-
-.add-card input {
-  flex: 1;
-  padding: var(--spacing-sm);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--input-bg);
-  color: var(--text-color);
-}
-
-.add-card select {
-  padding: var(--spacing-sm);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-sm);
-  background: var(--input-bg);
-  color: var(--text-color);
-}
-
-/* Buttons */
-.btn-edit, .btn-delete, .btn-save, .btn-cancel, .btn-add {
-  padding: var(--spacing-xs) var(--spacing-sm);
+.submit-btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--primary);
+  color: white;
   border: none;
   border-radius: var(--border-radius-sm);
   cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
+  transition: opacity 0.2s;
 }
 
-.btn-edit {
-  background: var(--primary);
-  color: white;
-}
-
-.btn-delete {
-  background: var(--danger);
-  color: white;
-}
-
-.btn-save {
-  background: var(--success);
-  color: white;
-}
-
-.btn-cancel {
-  background: var(--gray);
-  color: white;
-}
-
-.btn-add {
-  background: var(--primary);
-  color: white;
-}
-
-button:hover {
+.submit-btn:hover {
   opacity: 0.9;
 }
 
-button:active {
+.submit-btn:active {
   transform: translateY(1px);
 } 

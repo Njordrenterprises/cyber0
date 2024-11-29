@@ -27,11 +27,18 @@
        async loadMessages() {
          if (!this.cardId || !this.cardData) return;
          this.messages = await this.cardData.loadCardMessages(this.cardId);
-         this.messages.sort((a, b) => b.timestamp - a.timestamp);
+         this.messages.sort((a, b) => a.timestamp - b.timestamp);
        }
      }"
      x-init="init">
   <div class="info-content">
+    <form @submit.prevent="submitMessage" class="input-container">
+      <input type="text" 
+             x-model="inputValue" 
+             placeholder="Enter a message">
+      <button type="submit" class="submit-btn">Submit</button>
+    </form>
+
     <div class="message-container">
       <template x-for="message in messages" :key="message.id">
         <div class="message">
@@ -43,12 +50,5 @@
         </div>
       </template>
     </div>
-
-    <form @submit.prevent="submitMessage" class="input-container">
-      <input type="text" 
-             x-model="inputValue" 
-             placeholder="Enter a message">
-      <button type="submit" class="submit-btn">Submit</button>
-    </form>
   </div>
 </div>
