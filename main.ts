@@ -31,7 +31,45 @@ globalThis.cardData.info = {
     }
   },
   userId: 'test-user',
-  ...alpineMethods
+  handleKvUpdate: async (index: number, newMessage: string) => {
+    const key = ['cards', 'info', 'test-user', index];
+    let entry = await globalThis.cardData.info.kv.get(key);
+    
+    // Initialize entry if it doesn't exist
+    if (!entry) {
+      entry = {
+        messages: [],
+        index: index,
+        timestamp: Date.now()
+      };
+    }
+    
+    // Initialize messages array if it doesn't exist
+    if (!entry.messages) {
+      entry.messages = [];
+    }
+
+    const message = {
+      id: crypto.randomUUID(),
+      text: newMessage,
+      timestamp: Date.now()
+    };
+    
+    entry.messages.push(message);
+    await globalThis.cardData.info.kv.set(key, entry);
+  },
+  handleKvDelete: async (index: number, messageId: string) => {
+    const key = ['cards', 'info', 'test-user', index];
+    const entry = await globalThis.cardData.info.kv.get(key);
+    if (!entry || !entry.messages) return;
+    entry.messages = entry.messages.filter(m => m.id !== messageId);
+    await globalThis.cardData.info.kv.set(key, entry);
+  },
+  loadCardMessages: async (index: number) => {
+    const key = ['cards', 'info', 'test-user', index];
+    const entry = await globalThis.cardData.info.kv.get(key);
+    return entry?.messages || [];
+  }
 };
 
 console.log('Card data initialized:', globalThis.cardData.info);
@@ -54,37 +92,64 @@ async function loadCardTemplate(name: string): Promise<string> {
     // Add initialization script for client
     const initScript = `
       <script>
-        if (!window.cardData) {
-          window.cardData = {
-            info: {
-              kv: {
-                get: async (key) => {
-                  const response = await fetch(\`/kv/get?key=\${key.join(',')}\`);
-                  const data = await response.json();
-                  return data;
-                },
-                set: async (key, value) => {
-                  await fetch('/kv/set', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: key.join(','), value })
-                  });
-                }
+        window.cardData = {
+          info: {
+            kv: {
+              get: async (key) => {
+                const response = await fetch(\`/kv/get?key=\${key.join(',')}\`);
+                const data = await response.json();
+                return data;
               },
-              userId: 'test-user',
-              handleKvUpdate: async (index, message) => {
-                const key = ['cards', 'info', 'test-user', index];
-                const value = { message, index, timestamp: Date.now() };
-                await window.cardData.info.kv.set(key, value);
-              },
-              loadCardMessage: async (index) => {
-                const key = ['cards', 'info', 'test-user', index];
-                const data = await window.cardData.info.kv.get(key);
-                return data?.message || '';
+              set: async (key, value) => {
+                await fetch('/kv/set', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: key.join(','), value })
+                });
               }
+            },
+            userId: 'test-user',
+            handleKvUpdate: async (index, newMessage) => {
+              const key = ['cards', 'info', 'test-user', index];
+              let entry = await window.cardData.info.kv.get(key);
+              
+              // Initialize entry if it doesn't exist
+              if (!entry) {
+                entry = {
+                  messages: [],
+                  index: index,
+                  timestamp: Date.now()
+                };
+              }
+              
+              // Initialize messages array if it doesn't exist
+              if (!entry.messages) {
+                entry.messages = [];
+              }
+
+              const message = {
+                id: crypto.randomUUID(),
+                text: newMessage,
+                timestamp: Date.now()
+              };
+              
+              entry.messages.push(message);
+              await window.cardData.info.kv.set(key, entry);
+            },
+            handleKvDelete: async (index, messageId) => {
+              const key = ['cards', 'info', 'test-user', index];
+              const entry = await window.cardData.info.kv.get(key);
+              if (!entry || !entry.messages) return;
+              entry.messages = entry.messages.filter(m => m.id !== messageId);
+              await window.cardData.info.kv.set(key, entry);
+            },
+            loadCardMessages: async (index) => {
+              const key = ['cards', 'info', 'test-user', index];
+              const entry = await window.cardData.info.kv.get(key);
+              return entry?.messages || [];
             }
-          };
-        }
+          }
+        };
       </script>
     `;
     
@@ -96,138 +161,56 @@ async function loadCardTemplate(name: string): Promise<string> {
 }
 
 // KV operation handlers
-async function handleKvGet(key: string[]): Promise<Response> {
-  console.log('KV GET:', key);
-  const data = await kv.get(key);
-  console.log('KV GET result:', data.value);
-  return new Response(JSON.stringify(data.value), {
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-async function handleKvSet(key: string[], value: unknown): Promise<Response> {
-  console.log('KV SET:', key, value);
-  
-  try {
-    // Set the value
-    const ok = await kv.atomic()
-      .set(key, value)
-      .commit();
-      
-    if (!ok) {
-      console.error('KV SET failed atomic commit');
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Failed to set value' 
-      }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Verify the set worked
-    const verify = await kv.get(key);
-    console.log('KV SET verify:', verify);
-    
-    return new Response(JSON.stringify({ 
-      success: true, 
-      value: verify.value 
-    }), {
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error: unknown) {
-    console.error('KV SET error:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+async function handleKvGet(req: Request): Promise<Response> {
+  const url = new URL(req.url);
+  const keyStr = url.searchParams.get('key');
+  if (!keyStr) {
+    return new Response('Missing key parameter', { status: 400 });
   }
+  const key = keyStr.split(',').map(part => {
+    const num = Number(part);
+    return isNaN(num) ? part : num;
+  });
+  const data = await kv.get(key as Deno.KvKey);
+  return new Response(JSON.stringify(data.value), {
+    headers: { 'Content-Type': 'application/json' }
+  });
 }
 
-function handleKvWatch(key: string[]): Response {
-  console.log('KV WATCH:', key);
-  const encoder = new TextEncoder();
-  
-  const stream = new ReadableStream({
-    async start(controller) {
-      try {
-        const watcher = kv.watch([key]);
-        console.log('Starting watcher for key:', key);
-        
-        for await (const [entries] of watcher) {
-          console.log('KV WATCH raw entries:', entries);
-          // Encode the data as a string before sending
-          const data = encoder.encode(`data: ${JSON.stringify(entries)}\n\n`);
-          controller.enqueue(data);
-        }
-      } catch (error: unknown) {
-        console.error('KV WATCH error:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        const data = encoder.encode(`error: ${errorMessage}\n\n`);
-        controller.enqueue(data);
-      }
-    },
-    cancel() {
-      console.log('KV WATCH cancelled for key:', key);
-    }
+async function handleKvSet(req: Request): Promise<Response> {
+  const { key, value } = await req.json() as { key: string; value: InfoKvEntry };
+  if (!key || !value) {
+    return new Response('Missing key or value', { status: 400 });
+  }
+  const keyArr = key.split(',').map(part => {
+    const num = Number(part);
+    return isNaN(num) ? part : num;
   });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    },
-  });
+  await kv.set(keyArr as Deno.KvKey, value);
+  return new Response('OK');
 }
 
 async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   console.log(`${req.method} ${url.pathname}`);
 
-  // KV operations
-  if (url.pathname === "/kv/get") {
-    const keyStr = url.searchParams.get("key");
-    if (!keyStr) {
-      return new Response('Missing key parameter', { status: 400 });
-    }
-    const key = keyStr.split(",");
-    return handleKvGet(key);
+  // Handle KV operations
+  if (url.pathname === '/kv/get') {
+    return handleKvGet(req);
+  }
+  if (url.pathname === '/kv/set' && req.method === 'POST') {
+    return handleKvSet(req);
   }
 
-  if (url.pathname === "/kv/set") {
-    const body = await req.json();
-    if (!body.key || !body.value) {
-      return new Response('Missing key or value in body', { status: 400 });
-    }
-    const key = body.key.split(",");
-    return handleKvSet(key, body.value);
-  }
-
-  if (url.pathname === "/kv/watch") {
-    const keyStr = url.searchParams.get("key");
-    if (!keyStr) {
-      return new Response('Missing key parameter', { status: 400 });
-    }
-    const key = keyStr.split(",");
-    return handleKvWatch(key);
-  }
-
-  // Dynamic view loading
-  const viewMatch = url.pathname.match(/^\/views\/([^\/]+)\/?$/);
-  if (viewMatch) {
+  // Handle view loading
+  if (url.pathname.startsWith('/views/')) {
+    const viewName = url.pathname.split('/')[2];
     try {
-      const viewName = viewMatch[1];
-      console.log(`Loading view: ${viewName}`);
       const content = await loadView(viewName);
       return new Response(content, {
         headers: { "Content-Type": "text/html" },
       });
     } catch (_error) {
-      console.error(`Error loading view: ${viewMatch[1]}`);
       return new Response("View Not Found", { status: 404 });
     }
   }

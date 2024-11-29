@@ -1,52 +1,48 @@
 <!-- src/cards/info/info.html -->
 <div class="card info-card"
      x-data="{ 
-       message: '',
+       messages: [],
        inputValue: '',
        cardIndex: $el.closest('.card-wrapper').dataset.index,
        cardData: null,
        async init() {
-         // Wait for card data to be initialized
-         while (!globalThis.cardData?.info?.handleKvUpdate) {
-           console.log('Waiting for card data...');
-           await new Promise(resolve => setTimeout(resolve, 100));
-         }
-         console.log('Card data initialized:', globalThis.cardData.info);
+         // Get already initialized card data
          this.cardData = globalThis.cardData.info;
-         await this.loadMessage();
+         await this.loadMessages();
        },
        async submitMessage() {
-         console.log('Submitting message:', this.inputValue);
-         console.log('Card data:', this.cardData);
-         if (!this.cardData?.handleKvUpdate) {
-           console.error('Card methods not initialized:', this.cardData);
-           return;
-         }
+         if (!this.inputValue.trim()) return;
          await this.cardData.handleKvUpdate(parseInt(this.cardIndex), this.inputValue);
-         this.message = this.inputValue;
          this.inputValue = '';
+         await this.loadMessages();
        },
-       async loadMessage() {
-         console.log('Loading message for index:', this.cardIndex);
-         console.log('Card data:', this.cardData);
-         if (!this.cardData?.loadCardMessage) {
-           console.error('Card methods not initialized:', this.cardData);
-           return;
-         }
-         this.message = await this.cardData.loadCardMessage(parseInt(this.cardIndex));
+       async deleteMessage(messageId) {
+         await this.cardData.handleKvDelete(parseInt(this.cardIndex), messageId);
+         await this.loadMessages();
+       },
+       async loadMessages() {
+         this.messages = await this.cardData.loadCardMessages(parseInt(this.cardIndex));
        }
      }"
-     x-init="await init()">
+     x-init="init()">
   <div class="info-content">
     <h1>Info Card #<span x-text="parseInt(cardIndex) + 1"></span></h1>
-    <form @submit.prevent="submitMessage">
+    <div class="message-container">
+      <template x-for="message in messages" :key="message.id">
+        <div class="message">
+          <div class="message-text" x-text="message.text"></div>
+          <div class="message-meta">
+            <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
+            <button class="delete-btn" @click="deleteMessage(message.id)">×</button>
+          </div>
+        </div>
+      </template>
+    </div>
+    <form @submit.prevent="submitMessage" class="input-container">
       <input type="text" 
              x-model="inputValue" 
              placeholder="Enter a message">
       <button type="submit" class="submit-btn">Submit</button>
     </form>
-    <div class="message-display" x-show="message">
-      <p x-text="message"></p>
-    </div>
   </div>
 </div>

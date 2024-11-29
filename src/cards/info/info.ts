@@ -1,46 +1,47 @@
 import { Card, CardState, CardKvEntry } from '../cards.ts';
 
 export interface InfoState extends CardState {
-  message: string;
+  messages: InfoMessage[];
   index: number;
+}
+
+export interface InfoMessage {
+  id: string;
+  text: string;
+  timestamp: number;
 }
 
 export interface InfoKvEntry extends CardKvEntry {
-  message: string;
+  messages: InfoMessage[];
   index: number;
 }
 
-export interface InfoCardMethods {
-  handleKvUpdate(index: number, newMessage: string): Promise<void>;
-  loadCardMessage(index: number): Promise<string>;
-}
-
-class InfoCard extends Card<InfoState, InfoKvEntry> implements InfoCardMethods {
-  message: string = '';
+class InfoCard extends Card<InfoState, InfoKvEntry> {
+  messages: InfoMessage[] = [];
   index: number = 0;
 
   protected override async loadInitialState(): Promise<void> {
     const entry = await this.getKvEntry();
     if (entry) {
-      this.message = entry.message;
+      this.messages = entry.messages;
       this.index = entry.index;
     }
   }
 
-  async updateMessage(newMessage: string) {
+  async updateMessages(messages: InfoMessage[]) {
     const entry: InfoKvEntry = {
-      message: newMessage,
+      messages,
       index: this.index,
       timestamp: Date.now()
     };
     await this.setKvEntry(entry);
-    this.message = newMessage;
+    this.messages = messages;
   }
 
   override getState(): InfoState {
     return {
       ...super.getState(),
-      message: this.message,
+      messages: this.messages,
       index: this.index
     };
   }
@@ -50,28 +51,51 @@ class InfoCard extends Card<InfoState, InfoKvEntry> implements InfoCardMethods {
   }
 
   // Alpine.js methods
-  public async handleKvUpdate(index: number, newMessage: string): Promise<void> {
+  async handleKvUpdate(index: number, newMessage: string) {
     console.log('Handling KV update:', index, newMessage);
-    const entry: InfoKvEntry = {
-      message: newMessage,
-      index,
+    const entry = await this.getAlpineKvEntry<InfoKvEntry>(index);
+    const messages = entry?.messages || [];
+    
+    const message: InfoMessage = {
+      id: crypto.randomUUID(),
+      text: newMessage,
       timestamp: Date.now()
     };
-    await this.setAlpineKvEntry(index, entry);
+
+    messages.push(message);
+    await this.setAlpineKvEntry(index, {
+      messages,
+      index,
+      timestamp: Date.now()
+    });
   }
 
-  public async loadCardMessage(index: number): Promise<string> {
-    console.log('Loading card message:', index);
+  async handleKvDelete(index: number, messageId: string) {
+    console.log('Handling KV delete:', index, messageId);
+    const entry = await this.getAlpineKvEntry<InfoKvEntry>(index);
+    if (!entry) return;
+
+    const messages = entry.messages.filter(m => m.id !== messageId);
+    await this.setAlpineKvEntry(index, {
+      messages,
+      index,
+      timestamp: Date.now()
+    });
+  }
+
+  async loadCardMessages(index: number): Promise<InfoMessage[]> {
+    console.log('Loading messages for index:', index);
     const entry = await this.getAlpineKvEntry<InfoKvEntry>(index);
     console.log('Loaded entry:', entry);
-    return entry?.message || '';
+    return entry?.messages || [];
   }
 
   // Method to expose Alpine.js methods
-  public getAlpineMethods(): InfoCardMethods {
+  getAlpineMethods() {
     return {
       handleKvUpdate: this.handleKvUpdate.bind(this),
-      loadCardMessage: this.loadCardMessage.bind(this)
+      handleKvDelete: this.handleKvDelete.bind(this),
+      loadCardMessages: this.loadCardMessages.bind(this)
     };
   }
 }

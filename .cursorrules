@@ -18,6 +18,47 @@
 └── index.html            # Application shell
 ```
 
+## Initialization Rules
+
+### 1. Server-Side Card Initialization
+```typescript
+// Initialize card instance FIRST
+await infoCard.init(kv, 'test-user');
+
+// THEN expose methods to globalThis
+globalThis.cardData = {
+  info: {
+    kv: { /* KV methods */ },
+    userId: 'test-user',
+    ...infoCard.getAlpineMethods()  // Expose bound methods
+  }
+};
+```
+
+### 2. Client-Side Card Initialization
+```typescript
+// In card template x-data
+{
+  cardData: null,
+  async init() {
+    // Get already initialized card data
+    this.cardData = globalThis.cardData.info;
+    await this.loadMessage();
+  }
+}
+```
+
+### 3. Initialization Order
+1. Server initializes card instance
+2. Server exposes methods to globalThis
+3. Client gets reference to initialized data
+4. Client uses methods directly
+
+NEVER:
+- Poll for initialization
+- Re-initialize card data
+- Modify globalThis after initial setup
+
 ## Module Standards
 
 ### 1. Card Module Requirements
