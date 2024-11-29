@@ -22,8 +22,8 @@ curl -fsSL https://deno.land/x/install/install.sh | sh
 2. Clone and run:
 
 ```bash
-git clone [repository-url]
-cd cyber-framework
+git clone https://github.com/Njordrenterprises/cyber0.git
+cd cyber0
 deno task dev
 ```
 
@@ -145,4 +145,8 @@ export default new MyCard("my-card");
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Repository
+
+https://github.com/Njordrenterprises/cyber0
