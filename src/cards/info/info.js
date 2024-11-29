@@ -1,60 +1,50 @@
-import { Card } from '../cards.js';
+// src/cards/info/info.js
+(function() {
+  // Skip if already registered
+  if (globalThis.infoCard) return;
 
-class InfoCard extends Card {
-  message = '';
+  // Create a card instance using the global createCard function
+  globalThis.infoCard = globalThis.createCard('info');
 
-  getState() {
-    return {
-      ...super.getState(),
-      message: this.message,
-      index: this.cardIndex
-    };
-  }
-
-  // Public methods for Alpine.js component
-  async loadCardMessages() {
-    await this.loadMessages();
-    return this.messages;
-  }
-
-  async updateCardMessage(message) {
-    await this.updateMessage(message);
-  }
-
-  // Register Alpine.js component
-  registerComponent() {
-    globalThis.Alpine?.data('infoCard', () => ({
-      cardIndex: 0,
-      messages: [],
-      newMessage: '',
-      card: this,
+  // Define Alpine.js component
+  Alpine.data('infoCard', () => ({
+    cardIndex: 0,
+    messages: [],
+    newMessage: '',
+    card: globalThis.infoCard,
+    eventSource: null,
+    
+    async init() {
+      const wrapper = this.$el.closest('.card-wrapper');
+      if (!wrapper) throw new Error('No card wrapper found');
+      const index = wrapper.dataset.index;
+      if (!index) throw new Error('No index found');
       
-      async init() {
-        const wrapper = this.$el.closest('.card-wrapper');
-        this.cardIndex = parseInt(wrapper.dataset.index);
-        this.card.cardIndex = this.cardIndex;
-        this.messages = await this.card.loadCardMessages();
+      this.cardIndex = parseInt(index);
+      this.card.cardIndex = this.cardIndex;
+      
+      // Load initial messages
+      this.messages = await this.card.loadMessages();
+      
+      // Set up real-time updates
+      this.eventSource = this.card.setupKvWatch((messages) => {
+        this.messages = messages;
+      });
+    },
 
-        // Watch for KV updates
-        const eventSource = new EventSource(`/kv/watch?key=cards,info,test-user,${this.cardIndex}`);
-        eventSource.onmessage = async () => {
-          this.messages = await this.card.loadCardMessages();
-        };
-      },
+    async updateMessage() {
+      if (!this.newMessage.trim()) return;
+      await this.card.updateMessage(this.newMessage);
+      this.messages = await this.card.loadMessages();
+      this.newMessage = '';
+    },
 
-      async updateMessage() {
-        if (!this.newMessage.trim()) return;
-        await this.card.updateCardMessage(this.newMessage);
-        this.messages = await this.card.loadCardMessages();
-        this.newMessage = '';
+    // Cleanup when component is destroyed
+    destroy() {
+      if (this.eventSource) {
+        this.eventSource.close();
       }
-    }));
-  }
-}
-
-const infoCard = new InfoCard('info');
-
-// Register the component when Alpine is ready
-document.addEventListener('alpine:init', () => {
-  infoCard.registerComponent();
-}); 
+      this.card.cleanup();
+    }
+  }));
+})(); 
