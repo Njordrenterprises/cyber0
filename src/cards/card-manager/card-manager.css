@@ -1,0 +1,125 @@
+.card-manager {
+  padding: 1rem;
+  background: var(--bg-color);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.cards-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.card-wrapper {
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: var(--spacing-sm);
+  background: rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.card-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 500;
+}
+
+.card-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.card-edit {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.card-edit input {
+  flex: 1;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--input-bg);
+  color: var(--text-color);
+}
+
+.edit-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.add-card {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.add-card input {
+  flex: 1;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--input-bg);
+  color: var(--text-color);
+}
+
+.add-card select {
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--input-bg);
+  color: var(--text-color);
+}
+
+/* Buttons */
+.btn-edit, .btn-delete, .btn-save, .btn-cancel, .btn-add {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: none;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.btn-edit {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-delete {
+  background: var(--danger);
+  color: white;
+}
+
+.btn-save {
+  background: var(--success);
+  color: white;
+}
+
+.btn-cancel {
+  background: var(--gray);
+  color: white;
+}
+
+.btn-add {
+  background: var(--primary);
+  color: white;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+
+button:active {
+  transform: translateY(1px);
+} 

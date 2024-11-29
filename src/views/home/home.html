@@ -1,17 +1,53 @@
 <div class="view home">
   <h1>Welcome to Cyber Card System</h1>
   <div class="cards-container">
-    <div class="card-wrapper" data-index="0">
-      <div hx-get="/cards/info/template" hx-trigger="load" hx-swap="outerHTML"></div>
-    </div>
-    <div class="card-wrapper" data-index="1">
-      <div hx-get="/cards/info/template" hx-trigger="load" hx-swap="outerHTML"></div>
-    </div>
-    <div class="card-wrapper" data-index="2">
-      <div hx-get="/cards/info/template" hx-trigger="load" hx-swap="outerHTML"></div>
-    </div>
-    <div class="card-wrapper" data-index="3">
-      <div hx-get="/cards/info/template" hx-trigger="load" hx-swap="outerHTML"></div>
+    <div class="card-wrapper" data-index="test-card" hx-get="/cards/info/template" hx-trigger="load" hx-swap="innerHTML">
+      <script>
+        // Initialize card data first
+        window.cardData = window.cardData || {};
+        window.cardData.info = window.cardData.info || {
+          kv: {
+            get: async (key) => {
+              const response = await fetch(`/kv/get?key=${key.join(',')}`);
+              return response.json();
+            },
+            set: async (key, value) => {
+              await fetch('/kv/set', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: key.join(','), value })
+              });
+            }
+          },
+          userId: 'test-user',
+          handleKvUpdate: async (cardId, newMessage) => {
+            const key = ['cards', 'info', 'test-user', cardId];
+            let entry = await window.cardData.info.kv.get(key);
+            if (!entry) {
+              entry = { messages: [], cardId, timestamp: Date.now() };
+            }
+            const message = {
+              id: crypto.randomUUID(),
+              text: newMessage,
+              timestamp: Date.now()
+            };
+            entry.messages.push(message);
+            await window.cardData.info.kv.set(key, entry);
+          },
+          handleKvDelete: async (cardId, messageId) => {
+            const key = ['cards', 'info', 'test-user', cardId];
+            const entry = await window.cardData.info.kv.get(key);
+            if (!entry || !entry.messages) return;
+            entry.messages = entry.messages.filter(m => m.id !== messageId);
+            await window.cardData.info.kv.set(key, entry);
+          },
+          loadCardMessages: async (cardId) => {
+            const key = ['cards', 'info', 'test-user', cardId];
+            const entry = await window.cardData.info.kv.get(key);
+            return entry?.messages || [];
+          }
+        };
+      </script>
     </div>
   </div>
 </div>

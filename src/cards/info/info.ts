@@ -1,37 +1,32 @@
 import { Card, CardState, CardKvEntry } from '../cards.ts';
+import type { CardMessage } from '../../../db/client/types.ts';
 
 export interface InfoState extends CardState {
-  messages: InfoMessage[];
-  index: number;
-}
-
-export interface InfoMessage {
-  id: string;
-  text: string;
-  timestamp: number;
+  messages: CardMessage[];
+  cardId: string;
 }
 
 export interface InfoKvEntry extends CardKvEntry {
-  messages: InfoMessage[];
-  index: number;
+  messages: CardMessage[];
+  cardId: string;
 }
 
 class InfoCard extends Card<InfoState, InfoKvEntry> {
-  messages: InfoMessage[] = [];
-  index: number = 0;
+  messages: CardMessage[] = [];
+  cardId: string = '';
 
   protected override async loadInitialState(): Promise<void> {
     const entry = await this.getKvEntry();
     if (entry) {
       this.messages = entry.messages;
-      this.index = entry.index;
+      this.cardId = entry.cardId;
     }
   }
 
-  async updateMessages(messages: InfoMessage[]) {
+  async updateMessages(messages: CardMessage[]) {
     const entry: InfoKvEntry = {
       messages,
-      index: this.index,
+      cardId: this.cardId,
       timestamp: Date.now()
     };
     await this.setKvEntry(entry);
@@ -42,50 +37,49 @@ class InfoCard extends Card<InfoState, InfoKvEntry> {
     return {
       ...super.getState(),
       messages: this.messages,
-      index: this.index
+      cardId: this.cardId
     };
   }
 
-  protected override getKvKey(): ['cards', string, string, number] {
-    return ['cards', this.id, this.userId, this.index];
+  protected override getKvKey(): ['cards', string, string] {
+    return ['cards', this.id, this.userId];
   }
 
   // Alpine.js methods
-  async handleKvUpdate(index: number, newMessage: string) {
-    console.log('Handling KV update:', index, newMessage);
-    const entry = await this.getAlpineKvEntry<InfoKvEntry>(index);
-    const messages = entry?.messages || [];
+  async handleKvUpdate(cardId: string, newMessage: string) {
+    console.log('Handling KV update:', cardId, newMessage);
+    const key = ['cards', 'info', this.userId, cardId];
+    let entry = await this.getCardEntry<InfoKvEntry>(cardId);
+    if (!entry) {
+      entry = { messages: [], cardId, timestamp: Date.now() };
+    }
     
-    const message: InfoMessage = {
+    const message: CardMessage = {
       id: crypto.randomUUID(),
       text: newMessage,
       timestamp: Date.now()
     };
 
-    messages.push(message);
-    await this.setAlpineKvEntry(index, {
-      messages,
-      index,
-      timestamp: Date.now()
-    });
+    entry.messages.push(message);
+    await this.setCardEntry(cardId, entry);
   }
 
-  async handleKvDelete(index: number, messageId: string) {
-    console.log('Handling KV delete:', index, messageId);
-    const entry = await this.getAlpineKvEntry<InfoKvEntry>(index);
+  async handleKvDelete(cardId: string, messageId: string) {
+    console.log('Handling KV delete:', cardId, messageId);
+    const entry = await this.getCardEntry<InfoKvEntry>(cardId);
     if (!entry) return;
 
-    const messages = entry.messages.filter(m => m.id !== messageId);
-    await this.setAlpineKvEntry(index, {
+    const messages = entry.messages.filter((m: CardMessage) => m.id !== messageId);
+    await this.setCardEntry(cardId, {
+      ...entry,
       messages,
-      index,
       timestamp: Date.now()
     });
   }
 
-  async loadCardMessages(index: number): Promise<InfoMessage[]> {
-    console.log('Loading messages for index:', index);
-    const entry = await this.getAlpineKvEntry<InfoKvEntry>(index);
+  async loadCardMessages(cardId: string): Promise<CardMessage[]> {
+    console.log('Loading messages for card:', cardId);
+    const entry = await this.getCardEntry<InfoKvEntry>(cardId);
     console.log('Loaded entry:', entry);
     return entry?.messages || [];
   }

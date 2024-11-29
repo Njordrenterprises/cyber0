@@ -1,78 +1,16 @@
 import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
 import infoCard from "./src/cards/info/info.ts";
+import cardManager from "./src/cards/card-manager/card-manager.ts";
+import * as db from "./db/kv.ts";
+import { getClientScript } from "./db/client/index.ts";
 
-const kv = await Deno.openKv();
+// Initialize KV database
+await db.initKv();
 
-// Initialize card data for client
-if (!globalThis.cardData) {
-  globalThis.cardData = {};
-}
-
-// Initialize info card
-console.log('Initializing info card...');
-await infoCard.init(kv, 'test-user');
-
-// Get Alpine.js methods
-const alpineMethods = infoCard.getAlpineMethods();
-console.log('Alpine methods:', alpineMethods);
-
-// Initialize info card methods
-globalThis.cardData.info = {
-  kv: {
-    get: async (key: unknown[]) => {
-      console.log('Getting KV:', key);
-      const data = await kv.get(key);
-      console.log('Got KV result:', data.value);
-      return data.value;
-    },
-    set: async (key: unknown[], value: unknown) => {
-      console.log('Setting KV:', key, value);
-      await kv.set(key, value);
-    }
-  },
-  userId: 'test-user',
-  handleKvUpdate: async (index: number, newMessage: string) => {
-    const key = ['cards', 'info', 'test-user', index];
-    let entry = await globalThis.cardData.info.kv.get(key);
-    
-    // Initialize entry if it doesn't exist
-    if (!entry) {
-      entry = {
-        messages: [],
-        index: index,
-        timestamp: Date.now()
-      };
-    }
-    
-    // Initialize messages array if it doesn't exist
-    if (!entry.messages) {
-      entry.messages = [];
-    }
-
-    const message = {
-      id: crypto.randomUUID(),
-      text: newMessage,
-      timestamp: Date.now()
-    };
-    
-    entry.messages.push(message);
-    await globalThis.cardData.info.kv.set(key, entry);
-  },
-  handleKvDelete: async (index: number, messageId: string) => {
-    const key = ['cards', 'info', 'test-user', index];
-    const entry = await globalThis.cardData.info.kv.get(key);
-    if (!entry || !entry.messages) return;
-    entry.messages = entry.messages.filter(m => m.id !== messageId);
-    await globalThis.cardData.info.kv.set(key, entry);
-  },
-  loadCardMessages: async (index: number) => {
-    const key = ['cards', 'info', 'test-user', index];
-    const entry = await globalThis.cardData.info.kv.get(key);
-    return entry?.messages || [];
-  }
-};
-
-console.log('Card data initialized:', globalThis.cardData.info);
+// Initialize cards
+console.log('Initializing cards...');
+await infoCard.init('test-user');
+await cardManager.init('test-user');
 
 // File loading functions
 async function loadView(name: string): Promise<string> {
@@ -88,118 +26,50 @@ async function loadView(name: string): Promise<string> {
 async function loadCardTemplate(name: string): Promise<string> {
   try {
     const html = await Deno.readTextFile(`src/cards/${name}/${name}.html`);
-    
-    // Add initialization script for client
-    const initScript = `
-      <script>
-        window.cardData = {
-          info: {
-            kv: {
-              get: async (key) => {
-                const response = await fetch(\`/kv/get?key=\${key.join(',')}\`);
-                const data = await response.json();
-                return data;
-              },
-              set: async (key, value) => {
-                await fetch('/kv/set', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ key: key.join(','), value })
-                });
-              }
-            },
-            userId: 'test-user',
-            handleKvUpdate: async (index, newMessage) => {
-              const key = ['cards', 'info', 'test-user', index];
-              let entry = await window.cardData.info.kv.get(key);
-              
-              // Initialize entry if it doesn't exist
-              if (!entry) {
-                entry = {
-                  messages: [],
-                  index: index,
-                  timestamp: Date.now()
-                };
-              }
-              
-              // Initialize messages array if it doesn't exist
-              if (!entry.messages) {
-                entry.messages = [];
-              }
-
-              const message = {
-                id: crypto.randomUUID(),
-                text: newMessage,
-                timestamp: Date.now()
-              };
-              
-              entry.messages.push(message);
-              await window.cardData.info.kv.set(key, entry);
-            },
-            handleKvDelete: async (index, messageId) => {
-              const key = ['cards', 'info', 'test-user', index];
-              const entry = await window.cardData.info.kv.get(key);
-              if (!entry || !entry.messages) return;
-              entry.messages = entry.messages.filter(m => m.id !== messageId);
-              await window.cardData.info.kv.set(key, entry);
-            },
-            loadCardMessages: async (index) => {
-              const key = ['cards', 'info', 'test-user', index];
-              const entry = await window.cardData.info.kv.get(key);
-              return entry?.messages || [];
-            }
-          }
-        };
-      </script>
-    `;
-    
-    return initScript + html;
+    return `<script>${getClientScript()}</script>${html}`;
   } catch (error) {
     console.error(`Error loading card template ${name}:`, error);
     throw error;
   }
 }
 
-// KV operation handlers
-async function handleKvGet(req: Request): Promise<Response> {
-  const url = new URL(req.url);
-  const keyStr = url.searchParams.get('key');
-  if (!keyStr) {
-    return new Response('Missing key parameter', { status: 400 });
-  }
-  const key = keyStr.split(',').map(part => {
-    const num = Number(part);
-    return isNaN(num) ? part : num;
-  });
-  const data = await kv.get(key as Deno.KvKey);
-  return new Response(JSON.stringify(data.value), {
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
-
-async function handleKvSet(req: Request): Promise<Response> {
-  const { key, value } = await req.json() as { key: string; value: InfoKvEntry };
-  if (!key || !value) {
-    return new Response('Missing key or value', { status: 400 });
-  }
-  const keyArr = key.split(',').map(part => {
-    const num = Number(part);
-    return isNaN(num) ? part : num;
-  });
-  await kv.set(keyArr as Deno.KvKey, value);
-  return new Response('OK');
-}
-
+// Request handler
 async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   console.log(`${req.method} ${url.pathname}`);
 
   // Handle KV operations
   if (url.pathname === '/kv/get') {
-    return handleKvGet(req);
+    return db.handleKvGet(req);
   }
   if (url.pathname === '/kv/set' && req.method === 'POST') {
-    return handleKvSet(req);
+    return db.handleKvSet(req);
+  }
+
+  // Handle card management operations
+  if (url.pathname === '/cards/list' && req.method === 'GET') {
+    const cards = await db.getCardList('test-user');
+    return new Response(JSON.stringify(cards), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  if (url.pathname === '/cards/manage/add' && req.method === 'POST') {
+    const { name, type } = await req.json();
+    await db.addCard('test-user', name, type);
+    return new Response('OK');
+  }
+
+  if (url.pathname === '/cards/manage/delete' && req.method === 'POST') {
+    const { id } = await req.json();
+    await db.deleteCard('test-user', id);
+    return new Response('OK');
+  }
+
+  if (url.pathname === '/cards/manage/rename' && req.method === 'POST') {
+    const { id, name } = await req.json();
+    await db.renameCard('test-user', id, name);
+    return new Response('OK');
   }
 
   // Handle view loading
@@ -221,33 +91,11 @@ async function handler(req: Request): Promise<Response> {
     try {
       const cardName = cardMatch[1];
       console.log(`Loading card template: ${cardName}`);
-
-      // Re-initialize card data for each template request
-      if (cardName === 'info') {
-        await infoCard.init(kv, 'test-user');
-        
-        // Update methods in case they were lost
-        globalThis.cardData.info = {
-          kv: {
-            get: async (key: unknown[]) => {
-              const data = await kv.get(key);
-              return data.value;
-            },
-            set: async (key: unknown[], value: unknown) => {
-              await kv.set(key, value);
-            }
-          },
-          userId: 'test-user',
-          ...infoCard.getAlpineMethods()
-        };
-      }
-
       const content = await loadCardTemplate(cardName);
       return new Response(content, {
         headers: { "Content-Type": "text/html" },
       });
     } catch (_error) {
-      console.error(`Error loading card template: ${cardMatch[1]}`);
       return new Response("Card Template Not Found", { status: 404 });
     }
   }
