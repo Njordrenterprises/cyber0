@@ -1,7 +1,7 @@
 import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
 import infoCard from "./src/cards/info/info.ts";
 import * as db from "./db/kv.ts";
-import { createCard, deleteCard, getCards } from "./src/cards/cards.ts";
+import { createCard, deleteCard, getCards, addMessage, deleteMessage } from "./src/cards/cards.ts";
 import { addClient, broadcast } from "./src/ws/broadcast.ts";
 
 // Initialize KV database
@@ -127,6 +127,31 @@ async function handler(req: Request): Promise<Response> {
       value: cards
     });
     return new Response('OK');
+  }
+
+  // Handle message operations
+  if (url.pathname === '/cards/info/message/add' && req.method === 'POST') {
+    try {
+      const { cardId, text } = await req.json();
+      const message = await addMessage('test-user', 'info', cardId, text);
+      return new Response(JSON.stringify(message), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error adding message:', error);
+      return new Response('Error adding message', { status: 500 });
+    }
+  }
+
+  if (url.pathname === '/cards/info/message/delete' && req.method === 'POST') {
+    try {
+      const { cardId, messageId } = await req.json();
+      await deleteMessage('test-user', 'info', cardId, messageId);
+      return new Response('OK');
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      return new Response('Error deleting message', { status: 500 });
+    }
   }
 
   // Handle view loading

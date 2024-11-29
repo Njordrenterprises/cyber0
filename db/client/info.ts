@@ -20,39 +20,30 @@ export function getInfoCardMethods(): InfoCardMethods {
     },
     userId: 'test-user',
     handleKvUpdate: async (cardId: string, newMessage: string) => {
-      const key = ['cards', 'info', 'test-user', cardId];
-      
       try {
-        // Get current entry atomically
-        const entry = await getCardData().info.kv.get<CardEntry>(key);
-        
-        // Prepare new entry
-        const message: CardMessage = {
-          id: generateUUID(),
-          text: newMessage,
-          timestamp: Date.now()
-        };
-        
-        // Create or update entry with new message at start
-        const updatedEntry: CardEntry = {
-          messages: [message, ...(entry?.messages || [])],
-          cardId,
-          timestamp: Date.now()
-        };
-        
-        // Set atomically
-        await getCardData().info.kv.set(key, updatedEntry);
+        const response = await fetch('/cards/info/message/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cardId, text: newMessage })
+        });
+        if (!response.ok) throw new Error('Failed to add message');
       } catch (error) {
         console.error('Error in handleKvUpdate:', error);
         throw error;
       }
     },
     handleKvDelete: async (cardId: string, messageId: string) => {
-      const key = ['cards', 'info', 'test-user', cardId];
-      const entry = await getCardData().info.kv.get<CardEntry>(key);
-      if (!entry || !entry.messages) return;
-      entry.messages = entry.messages.filter(m => m.id !== messageId);
-      await getCardData().info.kv.set(key, entry);
+      try {
+        const response = await fetch('/cards/info/message/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cardId, messageId })
+        });
+        if (!response.ok) throw new Error('Failed to delete message');
+      } catch (error) {
+        console.error('Error in handleKvDelete:', error);
+        throw error;
+      }
     },
     loadCardMessages: async (cardId: string) => {
       const key = ['cards', 'info', 'test-user', cardId];

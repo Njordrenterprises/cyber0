@@ -20,10 +20,18 @@
                console.log('WebSocket message received:', data);
                if (data.type === 'update') {
                  const keyParts = data.key.split(',');
-                 const [, type, userId, list] = keyParts;
-                 if (list === 'list') {
+                 const [, type, userId, cardId] = keyParts;
+                 
+                 if (cardId === 'list') {
+                   // Handle card list updates
                    console.log('Updating card list');
                    this.cards = data.value.sort((a, b) => b.created - a.created);
+                 } else {
+                   // Handle message updates
+                   console.log('Dispatching message update for card:', cardId);
+                   window.dispatchEvent(new CustomEvent(`card-messages-${cardId}`, {
+                     detail: data.value.messages.sort((a, b) => b.timestamp - a.timestamp)
+                   }));
                  }
                }
              } catch (error) {
@@ -66,7 +74,6 @@
            x-data="{ 
              messages: [],
              inputValue: '',
-             socket: null,
              cardData: null,
              async init() {
                console.log('Initializing card:', card.id);
@@ -79,41 +86,18 @@
                // Load initial messages
                await this.refreshMessages();
                
-               // Set up WebSocket if not already connected
-               if (!window.cardSocket) {
-                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                 window.cardSocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-                 
-                 window.cardSocket.onmessage = async (event) => {
-                   try {
-                     const data = JSON.parse(event.data);
-                     console.log('WebSocket message received:', data);
-                     if (data.type === 'update') {
-                       const keyParts = data.key.split(',');
-                       const [, , , cardId] = keyParts;
-                       if (cardId === card.id) {
-                         console.log('Updating messages for card:', cardId);
-                         // Force a fresh load from KV to ensure consistency
-                         await this.refreshMessages();
-                       }
-                     }
-                   } catch (error) {
-                     console.error('Error handling WebSocket message:', error);
-                   }
-                 };
-
-                 window.cardSocket.onclose = () => {
-                   console.log('WebSocket closed, attempting to reconnect...');
-                   setTimeout(() => this.init(), 1000);
-                 };
-               }
+               // Listen for WebSocket updates
+               window.addEventListener(`card-messages-${card.id}`, (e) => {
+                 console.log('Received message update for card:', card.id, e.detail);
+                 this.messages = [...e.detail];
+               });
              },
              async destroy() {
-               // Don't close shared socket
+               window.removeEventListener(`card-messages-${card.id}`, null);
              },
              async refreshMessages() {
                const messages = await this.cardData.loadCardMessages(card.id);
-               this.messages = messages;
+               this.messages = [...messages].sort((a, b) => b.timestamp - a.timestamp);
              },
              async submitMessage() {
                if (!this.inputValue.trim()) return;
@@ -124,6 +108,7 @@
                try {
                  await this.cardData.handleKvUpdate(card.id, this.inputValue);
                  this.inputValue = '';
+                 await this.refreshMessages();
                } catch (error) {
                  console.error('Error submitting message:', error);
                }
