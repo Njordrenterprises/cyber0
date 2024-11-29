@@ -4,23 +4,57 @@
        messages: [],
        inputValue: '',
        cardId: null,
-       cardData: window.cardData.info,
+       cardData: null,
+       cards: [],
+       modalOpen: false,
+       newCardName: '',
        async init() {
-         const wrapper = $el.closest('.card-wrapper');
-         if (!wrapper) {
-           console.error('No card-wrapper found!');
-           return;
+         // Wait for cardData to be available
+         while (!window.cardData?.info) {
+           await new Promise(resolve => setTimeout(resolve, 100));
          }
-         this.cardId = wrapper.dataset.index;
+         this.cardData = window.cardData.info;
+         
+         await this.loadCards();
+         const wrapper = $el.closest('.card-wrapper');
+         if (wrapper) {
+           this.cardId = wrapper.dataset.index;
+           await this.loadMessages();
+         }
+       },
+       async loadCards() {
+         if (!this.cardData) return;
+         this.cards = await this.cardData.getCards();
+       },
+       async createCard() {
+         if (!this.cardData || !this.newCardName.trim()) return;
+         await this.cardData.createCard(this.newCardName);
+         this.newCardName = '';
+         this.modalOpen = false;
+         await this.loadCards();
+       },
+       async deleteCard(cardId) {
+         if (!this.cardData) return;
+         if (!confirm('Are you sure you want to delete this card?')) return;
+         await this.cardData.deleteCard(cardId);
+         await this.loadCards();
+       },
+       async viewCard(cardId) {
+         this.cardId = cardId;
          await this.loadMessages();
        },
+       async backToList() {
+         this.cardId = null;
+         this.messages = [];
+       },
        async submitMessage() {
-         if (!this.inputValue.trim()) return;
+         if (!this.cardData || !this.inputValue.trim()) return;
          await this.cardData.handleKvUpdate(this.cardId, this.inputValue);
          this.inputValue = '';
          await this.loadMessages();
        },
        async deleteMessage(messageId) {
+         if (!this.cardData) return;
          await this.cardData.handleKvDelete(this.cardId, messageId);
          await this.loadMessages();
        },
@@ -32,23 +66,99 @@
      }"
      x-init="init">
   <div class="info-content">
-    <form @submit.prevent="submitMessage" class="input-container">
-      <input type="text" 
-             x-model="inputValue" 
-             placeholder="Enter a message">
-      <button type="submit" class="submit-btn">Submit</button>
-    </form>
-
-    <div class="message-container">
-      <template x-for="message in messages" :key="message.id">
-        <div class="message">
-          <div class="message-text" x-text="message.text"></div>
-          <div class="message-meta">
-            <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
-            <button class="delete-btn" @click="deleteMessage(message.id)">×</button>
+    <!-- Card List -->
+    <div class="card-management" x-show="!cardId">
+      <div class="cards-list">
+        <template x-for="card in cards" :key="card.id">
+          <div class="card-item">
+            <span @click="viewCard(card.id)" 
+                  class="card-name" 
+                  x-text="card.name"></span>
+            <div class="card-actions">
+              <button @click="deleteCard(card.id)" class="delete-btn">×</button>
+            </div>
           </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Card Messages -->
+    <div class="card-messages" x-show="cardId">
+      <div class="card-header">
+        <button @click="backToList" class="back-btn">← Back</button>
+      </div>
+      
+      <form @submit.prevent="submitMessage" class="input-container">
+        <input type="text" 
+               x-model="inputValue" 
+               placeholder="Enter a message">
+        <button type="submit" class="submit-btn">Submit</button>
+      </form>
+
+      <div class="message-container">
+        <template x-for="message in messages" :key="message.id">
+          <div class="message">
+            <div class="message-text" x-text="message.text"></div>
+            <div class="message-meta">
+              <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
+              <button class="delete-btn" @click="deleteMessage(message.id)">×</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Card Button -->
+  <button type="button" 
+          class="add-card-btn"
+          x-show="!cardId"
+          x-on:click="modalOpen = true">
+    +
+  </button>
+
+  <!-- New Card Modal -->
+  <div x-show="modalOpen"
+       style="display: none"
+       x-on:keydown.escape.prevent.stop="modalOpen = false"
+       role="dialog"
+       aria-modal="true"
+       x-id="['modal-title']"
+       :aria-labelledby="$id('modal-title')"
+       class="modal-overlay">
+    <!-- Panel -->
+    <div x-show="modalOpen" x-transition
+         x-on:click="modalOpen = false"
+         class="modal-container">
+      <div x-on:click.stop
+           class="modal-content">
+        <!-- Title -->
+        <h2 class="modal-title" :id="$id('modal-title')">Create New Card</h2>
+
+        <!-- Content -->
+        <div class="modal-body">
+          <input type="text"
+                 x-model="newCardName"
+                 placeholder="Enter card name"
+                 class="modal-input"
+                 @keyup.enter="createCard()">
         </div>
-      </template>
+
+        <!-- Buttons -->
+        <div class="modal-footer">
+          <button type="button" 
+                  x-on:click="modalOpen = false"
+                  class="modal-btn modal-btn-secondary">
+            Cancel
+          </button>
+
+          <button type="button"
+                  x-on:click="createCard()"
+                  class="modal-btn modal-btn-primary">
+            Create
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>

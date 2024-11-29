@@ -1,7 +1,7 @@
 import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
 import infoCard from "./src/cards/info/info.ts";
 import * as db from "./db/kv.ts";
-import { getClientScript } from "./db/client/index.ts";
+import { createCard, deleteCard, getCards } from "./src/cards/cards.ts";
 
 // Initialize KV database
 await db.initKv();
@@ -14,7 +14,7 @@ await infoCard.init('test-user');
 async function loadView(name: string): Promise<string> {
   try {
     const viewModule = await import(`./src/views/${name}/${name}.ts`);
-    return viewModule.layout("");
+    return await viewModule.layout("");
   } catch (error) {
     console.error(`Error loading view ${name}:`, error);
     throw error;
@@ -24,7 +24,7 @@ async function loadView(name: string): Promise<string> {
 async function loadCardTemplate(name: string): Promise<string> {
   try {
     const html = await Deno.readTextFile(`src/cards/${name}/${name}.html`);
-    return `<script>${getClientScript()}</script>${html}`;
+    return html;
   } catch (error) {
     console.error(`Error loading card template ${name}:`, error);
     throw error;
@@ -36,12 +36,47 @@ async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   console.log(`${req.method} ${url.pathname}`);
 
+  // Handle CSS files
+  if (url.pathname.endsWith('.css')) {
+    try {
+      const content = await Deno.readTextFile(`.${url.pathname}`);
+      return new Response(content, {
+        headers: { 'Content-Type': 'text/css' }
+      });
+    } catch (error) {
+      console.error(`Error loading CSS file: ${url.pathname}`, error);
+      return new Response('Not Found', { status: 404 });
+    }
+  }
+
   // Handle KV operations
   if (url.pathname === '/kv/get') {
     return db.handleKvGet(req);
   }
   if (url.pathname === '/kv/set' && req.method === 'POST') {
     return db.handleKvSet(req);
+  }
+
+  // Handle info card operations
+  if (url.pathname === '/cards/info/list' && req.method === 'GET') {
+    const cards = await getCards('test-user', 'info');
+    return new Response(JSON.stringify(cards), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  if (url.pathname === '/cards/info/create' && req.method === 'POST') {
+    const { name } = await req.json();
+    const card = await createCard('test-user', name, 'info');
+    return new Response(JSON.stringify(card), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  if (url.pathname === '/cards/info/delete' && req.method === 'POST') {
+    const { cardId } = await req.json();
+    await deleteCard('test-user', cardId, 'info');
+    return new Response('OK');
   }
 
   // Handle view loading

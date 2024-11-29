@@ -1,53 +1,147 @@
-<div class="view home">
-  <h1>Welcome to Cyber Card System</h1>
-  <div class="cards-container">
-    <div class="card-wrapper" data-index="test-card" hx-get="/cards/info/template" hx-trigger="load" hx-swap="innerHTML">
-      <script>
-        // Initialize card data first
-        window.cardData = window.cardData || {};
-        window.cardData.info = window.cardData.info || {
-          kv: {
-            get: async (key) => {
-              const response = await fetch(`/kv/get?key=${key.join(',')}`);
-              return response.json();
-            },
-            set: async (key, value) => {
-              await fetch('/kv/set', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: key.join(','), value })
-              });
-            }
-          },
-          userId: 'test-user',
-          handleKvUpdate: async (cardId, newMessage) => {
-            const key = ['cards', 'info', 'test-user', cardId];
-            let entry = await window.cardData.info.kv.get(key);
-            if (!entry) {
-              entry = { messages: [], cardId, timestamp: Date.now() };
-            }
-            const message = {
-              id: crypto.randomUUID(),
-              text: newMessage,
-              timestamp: Date.now()
-            };
-            entry.messages.push(message);
-            await window.cardData.info.kv.set(key, entry);
-          },
-          handleKvDelete: async (cardId, messageId) => {
-            const key = ['cards', 'info', 'test-user', cardId];
-            const entry = await window.cardData.info.kv.get(key);
-            if (!entry || !entry.messages) return;
-            entry.messages = entry.messages.filter(m => m.id !== messageId);
-            await window.cardData.info.kv.set(key, entry);
-          },
-          loadCardMessages: async (cardId) => {
-            const key = ['cards', 'info', 'test-user', cardId];
-            const entry = await window.cardData.info.kv.get(key);
-            return entry?.messages || [];
-          }
-        };
-      </script>
-    </div>
+<div class="view home"
+     x-data="{
+       cards: [],
+       async init() {
+         // Wait for cardData to be available
+         while (!window.cardData?.info) {
+           await new Promise(resolve => setTimeout(resolve, 100));
+         }
+         // Load cards
+         await this.loadCards();
+       },
+       async loadCards() {
+         this.cards = await window.cardData.info.getCards();
+       },
+       async createCard(name) {
+         if (!name.trim()) return;
+         await window.cardData.info.createCard(name);
+         await this.loadCards();
+       }
+     }"
+     x-init="init">
+  <div class="header">
+    <h1>Cyber Framework</h1>
+    <!-- New Card Button -->
+    <button type="button" 
+            class="add-card-btn"
+            @click="$dispatch('open-new-card')">
+      +
+    </button>
   </div>
+  
+  <!-- Cards Grid -->
+  <div class="cards-container">
+    <template x-for="card in cards" :key="card.id">
+      <div class="card info-card"
+           x-data="{ 
+             messages: [],
+             inputValue: '',
+             async init() {
+               this.messages = await window.cardData.info.loadCardMessages(card.id);
+             },
+             async submitMessage() {
+               if (!this.inputValue.trim()) return;
+               await window.cardData.info.handleKvUpdate(card.id, this.inputValue);
+               this.inputValue = '';
+               this.messages = await window.cardData.info.loadCardMessages(card.id);
+             },
+             async deleteMessage(messageId) {
+               await window.cardData.info.handleKvDelete(card.id, messageId);
+               this.messages = await window.cardData.info.loadCardMessages(card.id);
+             }
+           }"
+           x-init="init">
+        <div class="info-content">
+          <h2 x-text="card.name"></h2>
+          
+          <form @submit.prevent="submitMessage" class="input-container">
+            <input type="text" 
+                   x-model="inputValue" 
+                   placeholder="Enter a message">
+            <button type="submit" class="submit-btn">Submit</button>
+          </form>
+
+          <div class="message-container">
+            <template x-for="message in messages" :key="message.id">
+              <div class="message">
+                <div class="message-text" x-text="message.text"></div>
+                <div class="message-meta">
+                  <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
+                  <button class="delete-btn" @click="deleteMessage(message.id)">×</button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div class="card-actions">
+            <button @click="window.cardData.info.deleteCard(card.id).then(() => $dispatch('refresh-cards'))" 
+                    class="delete-btn">×</button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- New Card Modal -->
+  <template x-teleport="body">
+    <div x-data="{ 
+      open: false,
+      cardName: '',
+      submit() {
+        if (!this.cardName.trim()) return;
+        $dispatch('create-card', { name: this.cardName });
+        this.cardName = '';
+        this.open = false;
+      }
+    }" 
+    class="new-card-modal"
+    @open-new-card.window="open = true"
+    @create-card.window="createCard($event.detail.name)"
+    @refresh-cards.window="loadCards()">
+      <!-- Modal -->
+      <div x-show="open"
+           style="display: none"
+           x-on:keydown.escape.prevent.stop="open = false"
+           role="dialog"
+           aria-modal="true"
+           x-id="['modal-title']"
+           :aria-labelledby="$id('modal-title')"
+           class="modal-overlay">
+        <!-- Panel -->
+        <div x-show="open" x-transition
+             x-on:click="open = false"
+             class="modal-container">
+          <div x-on:click.stop
+               class="modal-content">
+            <!-- Title -->
+            <h2 class="modal-title" :id="$id('modal-title')">Create New Card</h2>
+
+            <!-- Content -->
+            <div class="modal-body">
+              <input type="text"
+                     x-model="cardName"
+                     placeholder="Enter card name"
+                     class="modal-input"
+                     @keyup.enter="submit()">
+            </div>
+
+            <!-- Buttons -->
+            <div class="modal-footer">
+              <button type="button" 
+                      x-on:click="open = false"
+                      class="modal-btn modal-btn-secondary">
+                Cancel
+              </button>
+
+              <button type="button"
+                      x-on:click="submit()"
+                      class="modal-btn modal-btn-primary">
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
 </div>

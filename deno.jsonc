@@ -4,7 +4,7 @@
   },
   "fmt": {
     "include": ["src/"],
-    "exclude": ["src/js/htmx.min.js", "src/js/alpine.min.js"],
+    "exclude": ["js/htmx.min.js", "js/alpine.min.js"],
     "indentWidth": 2,
     "lineWidth": 80,
     "semiColons": true,
@@ -12,7 +12,7 @@
   },
   "lint": {
     "include": ["src/"],
-    "exclude": ["src/js/htmx.min.js", "src/js/alpine.min.js"],
+    "exclude": ["js/htmx.min.js", "js/alpine.min.js"],
     "rules": {
       "tags": ["recommended"]
     }

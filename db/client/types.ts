@@ -15,7 +15,22 @@ export interface CardEntry {
   timestamp: number;
 }
 
-export interface InfoCardMethods {
+export interface BaseCard {
+  id: string;
+  name: string;
+  type: string;
+  created: number;
+}
+
+// Shared card methods that all cards will have
+export interface BaseCardMethods {
+  createCard: (name: string) => Promise<BaseCard>;
+  deleteCard: (cardId: string) => Promise<void>;
+  getCards: () => Promise<BaseCard[]>;
+}
+
+// Info card specific methods
+export interface InfoCardMethods extends BaseCardMethods {
   kv: KvMethods;
   userId: string;
   handleKvUpdate: (cardId: string, newMessage: string) => Promise<void>;

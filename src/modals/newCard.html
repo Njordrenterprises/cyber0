@@ -1,0 +1,67 @@
+<div x-data="{ 
+  open: false,
+  cardName: '',
+  async createCard() {
+    if (!this.cardName.trim()) return;
+    await window.cardData.info.createCard(this.cardName);
+    this.cardName = '';
+    this.open = false;
+    // Trigger card list refresh in parent component
+    const infoCard = document.querySelector('.info-card').__x.$data;
+    if (infoCard && infoCard.loadCards) {
+      await infoCard.loadCards();
+    }
+  }
+}" class="new-card-modal">
+  <!-- Trigger -->
+  <button type="button" 
+          class="add-card-btn"
+          x-on:click="open = true">
+    +
+  </button>
+
+  <!-- Modal -->
+  <div x-show="open"
+       style="display: none"
+       x-on:keydown.escape.prevent.stop="open = false"
+       role="dialog"
+       aria-modal="true"
+       x-id="['modal-title']"
+       :aria-labelledby="$id('modal-title')"
+       class="modal-overlay">
+    <!-- Panel -->
+    <div x-show="open" x-transition
+         x-on:click="open = false"
+         class="modal-container">
+      <div x-on:click.stop
+           class="modal-content">
+        <!-- Title -->
+        <h2 class="modal-title" :id="$id('modal-title')">Create New Card</h2>
+
+        <!-- Content -->
+        <div class="modal-body">
+          <input type="text"
+                 x-model="cardName"
+                 placeholder="Enter card name"
+                 class="modal-input"
+                 @keyup.enter="createCard()">
+        </div>
+
+        <!-- Buttons -->
+        <div class="modal-footer">
+          <button type="button" 
+                  x-on:click="open = false"
+                  class="modal-btn modal-btn-secondary">
+            Cancel
+          </button>
+
+          <button type="button"
+                  x-on:click="createCard()"
+                  class="modal-btn modal-btn-primary">
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
