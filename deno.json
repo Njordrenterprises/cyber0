@@ -1,7 +1,7 @@
 {
   "tasks": {
-    "dev": "deno run --unstable-kv --watch --allow-net --allow-read --allow-env main.ts",
-    "start": "deno run --unstable-kv --allow-net --allow-read --allow-env main.ts"
+    "dev": "deno run --unstable-broadcast-channel --unstable-kv --allow-net --allow-read --allow-write --allow-env --watch main.ts",
+    "start": "deno run --unstable-broadcast-channel --unstable-kv --allow-net --allow-read --allow-write --allow-env main.ts"
   },
   "compilerOptions": {
     "lib": [
@@ -11,48 +11,5 @@
       "dom.iterable",
       "dom.asynciterable"
     ]
-  },
-  "fmt": {
-    "files": {
-      "include": [
-        "src/"
-      ],
-      "exclude": [
-        "src/js/"
-      ]
-    },
-    "options": {
-      "useTabs": false,
-      "lineWidth": 80,
-      "indentWidth": 2,
-      "singleQuote": false,
-      "proseWrap": "preserve"
-    }
-  },
-  "lint": {
-    "files": {
-      "include": [
-        "src/"
-      ],
-      "exclude": [
-        "src/js/"
-      ]
-    },
-    "rules": {
-      "tags": [
-        "recommended"
-      ],
-      "exclude": [
-        "no-explicit-any"
-      ]
-    }
-  },
-  "deploy": {
-    "project": "88a90651-8d0a-4669-908f-b015f9d6e46c",
-    "exclude": [
-      "**/node_modules"
-    ],
-    "include": [],
-    "entrypoint": "main.ts"
   }
 }

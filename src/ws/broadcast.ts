@@ -1,4 +1,4 @@
-// Create a broadcast channel for real-time updates
+// @ts-ignore: Deno unstable API
 const channel = new BroadcastChannel("cyber-updates");
 
 // Broadcast a message to all clients

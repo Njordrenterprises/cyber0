@@ -1,7 +1,4 @@
 {
-  "tasks": {
-    "dev": "deno run --allow-net --allow-read --allow-write --watch main.ts"
-  },
   "fmt": {
     "include": ["src/"],
     "exclude": ["js/htmx.min.js", "js/alpine.min.js"],
@@ -16,8 +13,5 @@
     "rules": {
       "tags": ["recommended"]
     }
-  },
-  "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "dom.asynciterable", "deno.ns"]
   }
 } 
