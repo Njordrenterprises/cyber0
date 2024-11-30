@@ -7,10 +7,29 @@
        reconnectDelay: 2000,
        user: null,
        async newIdentity() {
-         // Delete the cookie
-         document.cookie = 'cyber_user_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-         // Reload the page to get a new identity
-         window.location.reload();
+         // Close EventSource connection
+         if (this.eventSource) {
+           this.eventSource.close();
+           this.eventSource = null;
+         }
+         
+         // Aggressively delete all cookies
+         const cookies = document.cookie.split(';');
+         for (let i = 0; i < cookies.length; i++) {
+           const cookie = cookies[i];
+           const eqPos = cookie.indexOf('=');
+           const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+           document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+           document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:01 GMT;path=/';
+           document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:01 GMT;path=/;domain=' + window.location.hostname;
+           document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:01 GMT;path=/;domain=' + window.location.hostname.split('.').slice(-2).join('.');
+         }
+         
+         // Wait a moment for cookies to clear
+         await new Promise(resolve => setTimeout(resolve, 100));
+         
+         // Force a clean reload
+         window.location.replace('/');
        },
        async init() {
          // Wait for cardData to be available
@@ -142,12 +161,6 @@
      @beforeunload.window="cleanup">
   <div class="header">
     <h1>Cyber Framework</h1>
-    <div class="user-info" x-show="user">
-      <span class="username" 
-            :style="{ '--user-color': user.color }" 
-            x-text="user.username"></span>
-      <button @click="newIdentity" class="identity-btn">New Identity</button>
-    </div>
     <!-- New Card Button -->
     <button type="button" 
             class="add-card-btn"

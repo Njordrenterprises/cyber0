@@ -12,34 +12,6 @@
   margin-bottom: var(--spacing-xl);
 }
 
-/* User info styles */
-.user-info {
-  position: absolute;
-  top: var(--spacing-md);
-  right: var(--spacing-md);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-sm);
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-}
-
-.user-info:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.user-info span {
-  color: red !important;
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
 /* Add card button */
 .add-card-btn {
   position: absolute;
@@ -72,26 +44,6 @@
   max-width: var(--content-width-xl, 1440px);
   margin: 0 auto;
   padding: var(--spacing-lg);
-}
-
-.identity-btn {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-primary);
-  padding: 0.75rem 1.5rem;
-  margin: 0.5rem 0;
-  width: 100%;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 0.9rem;
-  text-align: center;
-}
-
-.identity-btn:hover {
-  border-color: var(--primary);
-  box-shadow: 0 0 15px var(--primary-glow);
-  color: var(--primary);
 }
 
 

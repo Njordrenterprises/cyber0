@@ -16,13 +16,18 @@ interface User {
 
 export async function getOrCreateUser(req: Request): Promise<{ user: User; response: Response }> {
   const kv = getKv();
-  const cookies = parse(req.headers.get('cookie') || '');
+  const cookieHeader = req.headers.get('cookie');
+  console.log('Cookie header:', cookieHeader);  // Debug log
+  
+  const cookies = parse(cookieHeader || '');
   const userId = cookies[USER_COOKIE_NAME];
+  console.log('Parsed userId from cookie:', userId);  // Debug log
 
   let user: User;
   const response = new Response();
 
-  if (userId) {
+  // Only try to get existing user if we have a valid UUID
+  if (userId && userId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)) {
     // Try to get existing user
     const result = await kv.get<User>(['users', userId]);
     if (result.value) {
@@ -32,50 +37,14 @@ export async function getOrCreateUser(req: Request): Promise<{ user: User; respo
         lastSeen: Date.now()
       };
       await kv.set(['users', userId], user);
-      console.log('Existing User:', {
-        id: user.id,
-        username: user.username,
-        color: user.color,
-        created: new Date(user.created).toLocaleString(),
-        lastSeen: new Date(user.lastSeen).toLocaleString()
-      });
+      console.log('Found existing user:', user);
     } else {
-      // User ID in cookie not found in KV, create new user
-      const username = generateUsername();
-      user = {
-        id: crypto.randomUUID(),
-        username,
-        color: `hsl(${Math.abs(username.length * 137.508) % 360}, 85%, 75%)`,
-        created: Date.now(),
-        lastSeen: Date.now()
-      };
-      await kv.set(['users', user.id], user);
-      console.log('New User (Cookie Not Found):', {
-        id: user.id,
-        username: user.username,
-        color: user.color,
-        created: new Date(user.created).toLocaleString(),
-        lastSeen: new Date(user.lastSeen).toLocaleString()
-      });
+      console.log('Cookie exists but no user found, creating new');
+      user = await createNewUser();
     }
   } else {
-    // Create new user
-    const username = generateUsername();
-    user = {
-      id: crypto.randomUUID(),
-      username,
-      color: `hsl(${Math.abs(username.length * 137.508) % 360}, 85%, 75%)`,
-      created: Date.now(),
-      lastSeen: Date.now()
-    };
-    await kv.set(['users', user.id], user);
-    console.log('New User (No Cookie):', {
-      id: user.id,
-      username: user.username,
-      color: user.color,
-      created: new Date(user.created).toLocaleString(),
-      lastSeen: new Date(user.lastSeen).toLocaleString()
-    });
+    console.log('No valid cookie, creating new user');
+    user = await createNewUser();
   }
 
   // Always set the cookie in the response
@@ -89,6 +58,21 @@ export async function getOrCreateUser(req: Request): Promise<{ user: User; respo
   response.headers.set('Set-Cookie', cookieValue);
 
   return { user, response };
+}
+
+async function createNewUser(): Promise<User> {
+  const username = generateUsername();
+  const user: User = {
+    id: crypto.randomUUID(),
+    username,
+    color: `hsl(${Math.abs(username.length * 137.508) % 360}, 85%, 75%)`,
+    created: Date.now(),
+    lastSeen: Date.now()
+  };
+  const kv = getKv();
+  await kv.set(['users', user.id], user);
+  console.log('Created new user:', user);
+  return user;
 }
 
 export async function getUserById(userId: string): Promise<User | null> {
