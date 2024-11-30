@@ -15,6 +15,71 @@ await initBroadcast();
 // Keep track of active SSE connections
 const clients = new Set<ReadableStreamDefaultController>();
 
+// Create an AbortController for graceful shutdown
+const ac = new AbortController();
+let isShuttingDown = false;
+
+// Cleanup function to ensure all resources are properly closed
+async function cleanup(signal?: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  console.log(`\nShutdown initiated${signal ? ` by ${signal}` : ''}...`);
+
+  // Set a timeout for forced exit
+  const forceExitTimeout = setTimeout(() => {
+    console.error('Force exiting after timeout...');
+    Deno.exit(1);
+  }, 5000);
+
+  try {
+    // 1. Close all SSE clients
+    console.log('Closing SSE clients...');
+    for (const client of clients) {
+      try {
+        client.close();
+      } catch (error) {
+        console.error('Error closing SSE client:', error);
+      }
+    }
+    clients.clear();
+
+    // 2. Close broadcast channel
+    console.log('Closing broadcast channel...');
+    await closeBroadcast();
+
+    // 3. Abort the server
+    console.log('Stopping server...');
+    ac.abort();
+
+    // Clear the force exit timeout
+    clearTimeout(forceExitTimeout);
+    console.log('Cleanup completed successfully');
+    Deno.exit(0);
+  } catch (error) {
+    console.error('Error during cleanup:', error);
+    Deno.exit(1);
+  }
+}
+
+// Register shutdown handlers for different signals
+const signals: Deno.Signal[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
+for (const signal of signals) {
+  Deno.addSignalListener(signal, () => cleanup(signal));
+}
+
+// Prevent unhandled rejections from crashing the app
+addEventListener("unhandledrejection", (event) => {
+  console.error("Unhandled rejection:", event.reason);
+  event.preventDefault();
+});
+
+// Handle uncaught errors
+addEventListener("error", (event) => {
+  console.error("Uncaught error:", event.error);
+  event.preventDefault();
+});
+
 // File loading functions
 async function loadView(name: string, user: { id: string; username: string }): Promise<string> {
   try {
@@ -233,13 +298,27 @@ async function handler(req: Request): Promise<Response> {
   return response;
 }
 
+// Start the server
 console.log("Starting server on http://0.0.0.0:8000");
-const server = Deno.serve({ port: 8000, hostname: "0.0.0.0" }, handler);
-
-// Handle server shutdown
-Deno.addSignalListener("SIGINT", () => {
-  console.log("Shutting down server...");
-  closeBroadcast();
-  server.shutdown();
-});
+try {
+  await Deno.serve({
+    port: 8000,
+    hostname: "0.0.0.0",
+    signal: ac.signal,
+    onListen({ hostname, port }) {
+      console.log(`Server ready at http://${hostname}:${port}`);
+    },
+    onError(error) {
+      console.error("Server error:", error);
+      return new Response("Internal Server Error", { status: 500 });
+    },
+  }, handler);
+} catch (error) {
+  if (error instanceof TypeError && error.message.includes("aborted")) {
+    console.log("Server shutdown completed");
+  } else {
+    console.error("Fatal server error:", error);
+    await cleanup();
+  }
+}
 
