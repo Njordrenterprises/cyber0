@@ -11,5 +11,8 @@
       "dom.iterable",
       "dom.asynciterable"
     ]
+  },
+  "imports": {
+    "hono": "npm:hono@^4.6.12"
   }
 }

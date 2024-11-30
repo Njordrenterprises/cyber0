@@ -5,11 +5,16 @@
        reconnectAttempts: 0,
        maxReconnectAttempts: 5,
        reconnectDelay: 2000,
+       user: null,
        async init() {
          // Wait for cardData to be available
          while (!window.cardData?.info) {
            await new Promise(resolve => setTimeout(resolve, 100));
          }
+         
+         // Set user from context
+         this.user = window.userContext;
+         
          // Load cards
          await this.loadCards();
          
@@ -74,18 +79,22 @@
              const data = JSON.parse(event.data);
              console.log('EventSource message received:', data);
              
-             if (data.type === 'update') {
+             if (data.type === 'connected') {
+               this.user = data.user;
+               console.log('User connected:', this.user);
+             }
+             else if (data.type === 'update') {
                // Handle card list updates
-               if (data.key === 'cards,info,test-user,list') {
+               if (data.key === `cards,info,${this.user?.id},list`) {
                  this.cards = data.value.sort((a, b) => b.created - a.created);
                } else {
                  // Handle individual card updates
-                 const cardMatch = data.key.match(/^cards,info,test-user,([^,]+)$/);
+                 const cardMatch = data.key.match(`^cards,info,${this.user?.id},([^,]+)$`);
                  if (cardMatch) {
                    const cardId = cardMatch[1];
                    console.log('Dispatching message update for card:', cardId, data.value.messages);
                    window.dispatchEvent(new CustomEvent(`card-messages-${cardId}`, {
-                     detail: [...data.value.messages].sort((a, b) => b.timestamp - a.timestamp)
+                     detail: data.value.messages
                    }));
                  }
                }
@@ -118,6 +127,9 @@
      @beforeunload.window="cleanup">
   <div class="header">
     <h1>Cyber Framework</h1>
+    <div class="user-info" x-show="user">
+      <span class="username" x-text="user?.username"></span>
+    </div>
     <!-- New Card Button -->
     <button type="button" 
             class="add-card-btn"
@@ -148,7 +160,7 @@
                // Listen for WebSocket updates
                this.handleMessageUpdate = (e) => {
                  console.log('Received message update for card:', card.id, e.detail);
-                 this.messages = [...e.detail];
+                 this.messages = [...e.detail].sort((a, b) => b.timestamp - a.timestamp);
                };
                window.addEventListener(`card-messages-${card.id}`, this.handleMessageUpdate);
              },

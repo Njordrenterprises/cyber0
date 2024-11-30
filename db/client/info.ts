@@ -82,16 +82,11 @@ export function getInfoCardScript(): string {
     window.cardData = window.cardData || {};
     window.cardData.info = window.cardData.info || {
       async getCards() {
-        try {
-          const response = await fetch('/cards/info/list');
-          if (!response.ok) {
-            throw new Error(\`Failed to get cards: \${response.status}\`);
-          }
-          return await response.json();
-        } catch (error) {
-          console.error('Error getting cards:', error);
-          return [];
+        const response = await fetch('/cards/info/list');
+        if (!response.ok) {
+          throw new Error(\`Failed to get cards: \${response.status}\`);
         }
+        return await response.json();
       },
       
       async createCard(name) {
@@ -119,7 +114,10 @@ export function getInfoCardScript(): string {
       
       async loadCardMessages(cardId) {
         try {
-          const response = await fetch(\`/kv/get?key=cards,info,test-user,\${cardId}\`);
+          const userId = window.userContext?.id;
+          if (!userId) throw new Error('No user context found');
+          
+          const response = await fetch(\`/kv/get?key=cards,info,\${userId},\${cardId}\`);
           if (!response.ok) {
             throw new Error(\`Failed to load messages: \${response.status}\`);
           }
@@ -140,6 +138,7 @@ export function getInfoCardScript(): string {
         if (!response.ok) {
           throw new Error(\`Failed to add message: \${response.status}\`);
         }
+        return response.json();
       },
       
       async handleKvDelete(cardId, messageId) {
