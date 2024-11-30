@@ -42,19 +42,29 @@ export interface CardData {
   info: InfoCardMethods;
 }
 
-// This creates a unified type that works in both Deno and browser
+// Augment globalThis with our custom properties
 declare global {
-  interface Window extends Record<string, unknown> {
-    cardData: CardData;
+  interface UserContext {
+    id: string;
+    username: string;
+    color: string;
+    sprite: string;
+    created: number;
+    lastSeen: number;
   }
-  
-  var cardData: CardData;
+
+  interface UserWidget {
+    init: () => Promise<UserContext | null>;
+  }
+
+  interface GlobalThis {
+    userContext?: UserContext;
+    userWidget?: UserWidget;
+    cardData?: CardData;
+  }
 }
 
 // Use this to access cardData in a cross-platform way
 export const getCardData = (): CardData => {
-  if (typeof window !== 'undefined') {
-    return (window as Window).cardData;
-  }
-  return globalThis.cardData;
+  return globalThis.cardData!;
 }; 

@@ -1,9 +1,7 @@
-export { Card, type CardState, type CardKvEntry } from '../../db/card.ts';
 import { getKv } from '../../db/kv.ts';
 import { broadcast } from '../ws/broadcast.ts';
 
-// Shared types for all cards
-export interface BaseCard {
+export interface Card {
   id: string;
   name: string;
   type: string;
@@ -12,6 +10,7 @@ export interface BaseCard {
     id: string;
     username: string;
     color: string;
+    sprite: string;
   };
 }
 
@@ -23,28 +22,24 @@ export interface CardMessage {
     id: string;
     username: string;
     color: string;
+    sprite: string;
   };
 }
 
-export interface CardEntry {
+export interface CardData {
   messages: CardMessage[];
-  cardId: string;
-  timestamp: number;
-  owner: {
-    id: string;
-    username: string;
-    color: string;
-  };
 }
 
-// Shared card management functions
-export async function createCard(userId: string, username: string, name: string, type: string, color: string): Promise<BaseCard> {
-  const listKey = ['cards', type, 'global', 'list']; // Fixed key format
+export async function createCard(userId: string, username: string, type: string, name: string, color: string, sprite: string): Promise<Card> {
   const kv = getKv();
-  const result = await kv.get(listKey);
-  const cards = result.value || [];
-
-  const card: BaseCard = {
+  const listKey = ['cards', type, 'global', 'list'];
+  
+  // Get existing cards
+  const result = await kv.get<Card[]>(listKey);
+  const cards: Card[] = result.value || [];
+  
+  // Create new card
+  const card: Card = {
     id: crypto.randomUUID(),
     name,
     type,
@@ -52,28 +47,21 @@ export async function createCard(userId: string, username: string, name: string,
     createdBy: {
       id: userId,
       username,
-      color
+      color,
+      sprite
     }
   };
-
+  
   cards.push(card);
   await kv.set(listKey, cards);
   
   // Create initial card data
-  const cardDataKey = ['cards', type, 'data', card.id]; // Fixed key format
-  const initialData: CardEntry = {
-    messages: [],
-    cardId: card.id,
-    timestamp: Date.now(),
-    owner: {
-      id: userId,
-      username,
-      color
-    }
+  const cardData: CardData = {
+    messages: []
   };
-  await kv.set(cardDataKey, initialData);
+  await kv.set(['cards', type, 'data', card.id], cardData);
   
-  // Broadcast card creation
+  // Broadcast update
   broadcast({
     type: 'update',
     key: listKey.join(','),
@@ -88,11 +76,11 @@ export async function deleteCard(_userId: string, cardId: string, type: string):
   
   // Get global list
   const listKey = ['cards', type, 'global', 'list'];
-  const result = await kv.get(listKey);
+  const result = await kv.get<Card[]>(listKey);
   const cards = result.value || [];
   
   // Remove card from list without ownership check
-  const updatedCards = cards.filter(c => c.id !== cardId);
+  const updatedCards = cards.filter((c: Card) => c.id !== cardId);
   await kv.set(listKey, updatedCards);
 
   // Delete card data
@@ -107,41 +95,34 @@ export async function deleteCard(_userId: string, cardId: string, type: string):
   });
 }
 
-export async function getCards(_userId: string, type: string): Promise<BaseCard[]> {
+export async function getCards(_userId: string, type: string): Promise<Card[]> {
   const listKey = ['cards', type, 'global', 'list']; // Fixed key format
   const kv = getKv();
-  const result = await kv.get(listKey);
-  return (result.value || []).sort((a, b) => b.created - a.created);
+  const result = await kv.get<Card[]>(listKey);
+  return (result.value || []).sort((a: Card, b: Card) => b.created - a.created);
 }
 
-export async function addMessage(userId: string, username: string, type: string, cardId: string, text: string, color: string): Promise<CardMessage> {
-  const cardDataKey = ['cards', type, 'data', cardId];
+export async function addMessage(userId: string, username: string, type: string, cardId: string, text: string, color: string, sprite: string): Promise<CardMessage> {
   const kv = getKv();
+  const dataKey = ['cards', type, 'data', cardId];
   
   // Get current entry
-  const result = await kv.get<CardEntry>(cardDataKey);
-  let entry: CardEntry;
+  const result = await kv.get<CardData>(dataKey);
+  let cardData = result.value;
   
-  if (!result.value) {
+  if (!cardData) {
     // If no entry exists, get the card info from the list to set up initial data
-    const listResult = await kv.get(['cards', type, 'global', 'list']);
-    const card = listResult.value?.find(c => c.id === cardId);
+    const listResult = await kv.get<Card[]>(['cards', type, 'global', 'list']);
+    const card = listResult.value?.find((c: Card) => c.id === cardId);
     if (!card) throw new Error('Card not found');
     
     // Create new entry
-    entry = {
-      messages: [],
-      cardId,
-      timestamp: Date.now(),
-      owner: card.createdBy
+    cardData = {
+      messages: []
     };
-    // Save the new entry
-    await kv.set(cardDataKey, entry);
-  } else {
-    entry = result.value;
   }
-  
-  // Create new message
+
+  // Create message
   const message: CardMessage = {
     id: crypto.randomUUID(),
     text,
@@ -149,72 +130,47 @@ export async function addMessage(userId: string, username: string, type: string,
     author: {
       id: userId,
       username,
-      color
+      color,
+      sprite
     }
   };
-  
+
   // Update entry with new message at start
-  const updatedEntry: CardEntry = {
-    ...entry,
-    messages: [message, ...entry.messages],
-    timestamp: Date.now()
+  const updatedData: CardData = {
+    messages: [message, ...cardData.messages]
   };
-  
+
   // Save and broadcast card data update
-  await kv.set(cardDataKey, updatedEntry);
+  await kv.set(dataKey, updatedData);
   broadcast({
     type: 'update',
-    key: cardDataKey.join(','),
-    value: updatedEntry
+    key: dataKey.join(','),
+    value: updatedData
   });
-  
-  // Also broadcast global list update to refresh all cards
-  const listKey = ['cards', type, 'global', 'list'];
-  const listResult = await kv.get(listKey);
-  if (listResult.value) {
-    broadcast({
-      type: 'update',
-      key: listKey.join(','),
-      value: listResult.value
-    });
-  }
-  
+
   return message;
 }
 
 export async function deleteMessage(_userId: string, type: string, cardId: string, messageId: string): Promise<void> {
-  const cardDataKey = ['cards', type, 'data', cardId];
   const kv = getKv();
+  const dataKey = ['cards', type, 'data', cardId];
   
   // Get current entry
-  const result = await kv.get<CardEntry>(cardDataKey);
+  const result = await kv.get<CardData>(dataKey);
   if (!result.value) {
     throw new Error('Card not found');
   }
   
   // Update messages without ownership check
-  const updatedEntry: CardEntry = {
-    ...result.value,
-    messages: result.value.messages.filter(m => m.id !== messageId),
-    timestamp: Date.now()
+  const updatedData: CardData = {
+    messages: result.value.messages.filter(m => m.id !== messageId)
   };
-  
+
   // Save and broadcast card data update
-  await kv.set(cardDataKey, updatedEntry);
+  await kv.set(dataKey, updatedData);
   broadcast({
     type: 'update',
-    key: cardDataKey.join(','),
-    value: updatedEntry
+    key: dataKey.join(','),
+    value: updatedData
   });
-  
-  // Also broadcast global list update to refresh all cards
-  const listKey = ['cards', type, 'global', 'list'];
-  const listResult = await kv.get(listKey);
-  if (listResult.value) {
-    broadcast({
-      type: 'update',
-      key: listKey.join(','),
-      value: listResult.value
-    });
-  }
 }

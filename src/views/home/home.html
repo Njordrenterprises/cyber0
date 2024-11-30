@@ -161,6 +161,7 @@
      @beforeunload.window="cleanup">
   <div class="header">
     <h1>Cyber Framework</h1>
+    <div id="user-widget-container"></div>
     <!-- New Card Button -->
     <button type="button" 
             class="add-card-btn"
@@ -243,9 +244,10 @@
           <div class="card-header">
             <h2 :style="{ color: card.createdBy.color }" x-text="card.name"></h2>
             <div class="card-meta">
-              <span class="card-author">by <span 
-                :style="{ color: card.createdBy.color }"
-                x-text="card.createdBy.username"></span></span>
+              <span class="card-author">
+                <span class="author-sprite" x-text="card.createdBy.sprite"></span>
+                <span :style="{ color: card.createdBy.color }" x-text="card.createdBy.username"></span>
+              </span>
             </div>
           </div>
           
@@ -261,9 +263,10 @@
               <div class="message">
                 <div class="message-text" x-text="message.text"></div>
                 <div class="message-meta">
-                  <span class="message-author" 
-                        :style="{ color: message.author.color }"
-                        x-text="message.author.username"></span>
+                  <span class="message-author">
+                    <span class="author-sprite" x-text="message.author.sprite"></span>
+                    <span :style="{ color: message.author.color }" x-text="message.author.username"></span>
+                  </span>
                   <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
                   <button class="delete-btn" @click="handleDelete(message.id)">×</button>
                 </div>

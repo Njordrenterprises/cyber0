@@ -9,5 +9,5 @@ export function generateUUID(): string {
 }
 
 export function initializeCardData(): void {
-  window.cardData = window.cardData || {} as CardData;
+  globalThis.cardData = globalThis.cardData || {} as CardData;
 } 

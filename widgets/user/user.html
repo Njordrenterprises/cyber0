@@ -1,0 +1,24 @@
+<div class="user-widget" 
+     x-data="{ 
+       user: null,
+       async init() {
+         // First set from context
+         this.user = globalThis.userContext;
+         
+         // Then fetch fresh data from KV
+         const freshData = await globalThis.userWidget.init();
+         if (freshData) {
+           this.user = freshData;
+           console.log('Updated user with KV data:', this.user);
+         }
+       }
+     }">
+  <div class="user-display" x-show="user">
+    <div class="user-avatar">
+      <span class="user-sprite" x-text="user.sprite"></span>
+    </div>
+    <div class="user-info">
+      <span class="user-name" x-data-color="user.color" x-text="user.username"></span>
+    </div>
+  </div>
+</div> 
