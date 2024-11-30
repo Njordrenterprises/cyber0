@@ -3,6 +3,7 @@ import { validateContentType, validateCardInput, validateMessageInput, validateC
 import type { CreateCardRequest, MessageRequest, ErrorResponse } from "../types.ts";
 import { parseJsonSafely } from "../utils.ts";
 import { createCard, deleteCard, getCards, addMessage, deleteMessage } from "./cards.ts";
+import { getUserById } from "../services/user-service.ts";
 
 export interface CardRouter {
   handleRequest(req: Request): Promise<Response>;
@@ -58,14 +59,17 @@ export class BaseCardRouter implements CardRouter {
     const inputError = validateCardInput(data);
     if (inputError) return inputError;
 
-    try {
-      const card = await createCard(this.userId, data.name, this.cardType);
-      const cards = await getCards(this.userId, this.cardType);
-      broadcast({
-        type: 'update',
-        key: `cards,${this.cardType},${this.userId},list`,
-        value: cards
+    // Get user info
+    const user = await getUserById(this.userId);
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'User not found' } satisfies ErrorResponse), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    try {
+      const card = await createCard(this.userId, user.username, data.name, this.cardType);
       return new Response(JSON.stringify(card), {
         headers: { 'Content-Type': 'application/json' }
       });
@@ -85,7 +89,7 @@ export class BaseCardRouter implements CardRouter {
       const cards = await getCards(this.userId, this.cardType);
       broadcast({
         type: 'update',
-        key: `cards,${this.cardType},${this.userId},list`,
+        key: `cards,${this.cardType},global,list`,
         value: cards
       });
       return new Response('OK');
@@ -109,8 +113,17 @@ export class BaseCardRouter implements CardRouter {
     const cardError = await validateCardExists(this.userId, data.cardId, this.cardType);
     if (cardError) return cardError;
 
+    // Get user info
+    const user = await getUserById(this.userId);
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'User not found' } satisfies ErrorResponse), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     try {
-      const message = await addMessage(this.userId, this.cardType, data.cardId, data.text);
+      const message = await addMessage(this.userId, user.username, this.cardType, data.cardId, data.text);
       return new Response(JSON.stringify(message), {
         headers: { 'Content-Type': 'application/json' }
       });

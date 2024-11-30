@@ -105,9 +105,9 @@ export function validateKvKey(key: string): Response | null {
 }
 
 // Validate card exists
-export async function validateCardExists(userId: string, cardId: string, type: string): Promise<Response | null> {
+export async function validateCardExists(_userId: string, cardId: string, type: string): Promise<Response | null> {
   try {
-    const key = ['cards', type, userId, 'list'];
+    const key = ['cards', type, 'global', 'list'];
     const kv = await Deno.openKv();
     const result = await kv.get(key);
     const cards = result.value as Array<{ id: string }> || [];

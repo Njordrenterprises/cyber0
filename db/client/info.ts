@@ -48,11 +48,18 @@ export function getInfoCardMethods(): InfoCardMethods {
       }
     },
     loadCardMessages: async (cardId: string) => {
-      const key = ['cards', 'info', 'test-user', cardId];
-      console.log('Loading messages for card:', cardId);
-      const entry = await getCardData().info.kv.get<CardEntry>(key);
-      console.log('Loaded entry:', entry);
-      return entry?.messages || [];
+      try {
+        const response = await fetch(`/kv/get?key=cards,info,data,${cardId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to load messages: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Loaded messages:', data);
+        return data?.messages || [];
+      } catch (error) {
+        console.error('Error loading messages:', error);
+        return [];
+      }
     },
     createCard: async (name: string) => {
       const response = await fetch('/cards/info/create', {

@@ -85,11 +85,12 @@
              }
              else if (data.type === 'update') {
                // Handle card list updates
-               if (data.key === `cards,info,${this.user?.id},list`) {
-                 this.cards = data.value.sort((a, b) => b.created - a.created);
+               if (data.key.endsWith('global,list')) {
+                 console.log('Updating card list:', data.value);
+                 this.cards = [...data.value].sort((a, b) => b.created - a.created);
                } else {
                  // Handle individual card updates
-                 const cardMatch = data.key.match(`^cards,info,${this.user?.id},([^,]+)$`);
+                 const cardMatch = data.key.match(/^cards,info,data,([^,]+)$/);
                  if (cardMatch) {
                    const cardId = cardMatch[1];
                    console.log('Dispatching message update for card:', cardId, data.value.messages);
@@ -107,8 +108,8 @@
        async loadCards() {
          try {
            const fetchedCards = await window.cardData.info.getCards();
-           // Sort cards by created timestamp, newest first
-           this.cards = fetchedCards.sort((a, b) => b.created - a.created);
+           console.log('Loaded cards:', fetchedCards);
+           this.cards = [...fetchedCards].sort((a, b) => b.created - a.created);
          } catch (error) {
            console.error('Error loading cards:', error);
          }
@@ -116,7 +117,8 @@
        async createCard(name) {
          if (!name.trim()) return;
          try {
-           await window.cardData.info.createCard(name);
+           const card = await window.cardData.info.createCard(name);
+           console.log('Created card:', card);
            await this.loadCards();
          } catch (error) {
            console.error('Error creating card:', error);
@@ -211,6 +213,9 @@
         <div class="info-content">
           <div class="card-header">
             <h2 x-text="card.name"></h2>
+            <div class="card-meta">
+              <span class="card-author">by <span x-text="card.createdBy.username"></span></span>
+            </div>
           </div>
           
           <form @submit.prevent="submitMessage" class="input-container">
@@ -225,6 +230,7 @@
               <div class="message">
                 <div class="message-text" x-text="message.text"></div>
                 <div class="message-meta">
+                  <span class="message-author" x-text="message.author.username"></span>
                   <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
                   <button class="delete-btn" @click="handleDelete(message.id)">×</button>
                 </div>
