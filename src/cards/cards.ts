@@ -1,5 +1,6 @@
 import { getKv } from '../../db/kv.ts';
 import { broadcast } from '../ws/broadcast.ts';
+import { sendNotification } from '../services/notification-service.ts';
 
 export interface Card {
   id: string;
@@ -68,6 +69,11 @@ export async function createCard(userId: string, username: string, type: string,
     value: cards
   });
   
+  // Send notification to others
+  sendNotification('', {
+    title: `${username} created ${name}`
+  });
+  
   return card;
 }
 
@@ -78,6 +84,9 @@ export async function deleteCard(_userId: string, cardId: string, type: string):
   const listKey = ['cards', type, 'global', 'list'];
   const result = await kv.get<Card[]>(listKey);
   const cards = result.value || [];
+  
+  // Get card info before deletion
+  const card = cards.find(c => c.id === cardId);
   
   // Remove card from list without ownership check
   const updatedCards = cards.filter((c: Card) => c.id !== cardId);
@@ -93,6 +102,13 @@ export async function deleteCard(_userId: string, cardId: string, type: string):
     key: listKey.join(','),
     value: updatedCards
   });
+
+  // Send notification to others if we found the card
+  if (card) {
+    sendNotification('', {
+      title: `${card.createdBy.username} deleted ${card.name}`
+    });
+  }
 }
 
 export async function getCards(_userId: string, type: string): Promise<Card[]> {
@@ -106,17 +122,16 @@ export async function addMessage(userId: string, username: string, type: string,
   const kv = getKv();
   const dataKey = ['cards', type, 'data', cardId];
   
+  // Get card info for notification
+  const listKey = ['cards', type, 'global', 'list'];
+  const cardsResult = await kv.get<Card[]>(listKey);
+  const card = cardsResult.value?.find(c => c.id === cardId);
+  
   // Get current entry
   const result = await kv.get<CardData>(dataKey);
   let cardData = result.value;
   
   if (!cardData) {
-    // If no entry exists, get the card info from the list to set up initial data
-    const listResult = await kv.get<Card[]>(['cards', type, 'global', 'list']);
-    const card = listResult.value?.find((c: Card) => c.id === cardId);
-    if (!card) throw new Error('Card not found');
-    
-    // Create new entry
     cardData = {
       messages: []
     };
@@ -148,6 +163,13 @@ export async function addMessage(userId: string, username: string, type: string,
     value: updatedData
   });
 
+  // Send notification to others
+  if (card) {
+    sendNotification('', {
+      title: `${username} messaged ${card.name}`
+    });
+  }
+
   return message;
 }
 
@@ -160,6 +182,9 @@ export async function deleteMessage(_userId: string, type: string, cardId: strin
   if (!result.value) {
     throw new Error('Card not found');
   }
+
+  // Get message before deletion
+  const message = result.value.messages.find(m => m.id === messageId);
   
   // Update messages without ownership check
   const updatedData: CardData = {
@@ -173,4 +198,11 @@ export async function deleteMessage(_userId: string, type: string, cardId: strin
     key: dataKey.join(','),
     value: updatedData
   });
+
+  // Send notification to others if we found the message
+  if (message) {
+    sendNotification('', {
+      title: `${message.author.username} deleted message`
+    });
+  }
 }

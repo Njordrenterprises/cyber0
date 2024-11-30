@@ -3,11 +3,15 @@
   "specifiers": {
     "npm:hono@*": "4.6.12",
     "npm:hono@4.6.12": "4.6.12",
-    "npm:hono@^4.6.12": "4.6.12"
+    "npm:hono@^4.6.12": "4.6.12",
+    "npm:lucide@0.462": "0.462.0"
   },
   "npm": {
     "hono@4.6.12": {
       "integrity": "sha512-eHtf4kSDNw6VVrdbd5IQi16r22m3s7mWPLd7xOMhg1a/Yyb1A0qpUFq8xYMX4FMuDe1nTKeMX5rTx7Nmw+a+Ag=="
+    },
+    "lucide@0.462.0": {
+      "integrity": "sha512-mu9dpNXnonG2e2jO3jS8PCXwT0yNo8qyEOtEfcTIfbyRYgDa6Br81lP0eJRCcXUEvaGekw2h1diAvgL+l1M+GA=="
     }
   },
   "remote": {
@@ -90,7 +94,8 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:hono@^4.6.12"
+      "npm:hono@^4.6.12",
+      "npm:lucide@0.462"
     ]
   }
 }

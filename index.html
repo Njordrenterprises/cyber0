@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cyber Framework</title>
+    
+    <!-- PWA Support -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    
     <!-- Base Styles -->
     <link rel="stylesheet" href="/main.css">
     <link rel="stylesheet" href="/src/cards/cards.css">
@@ -14,13 +21,32 @@
     <!-- Client Scripts -->
     <script src="/js/htmx.min.js"></script>
     <script defer src="/js/alpine.min.js"></script>
-    <script type="module" src="/src/client/alpine.ts"></script>
+    <script type="module">
+        import { createIcons, User, Plus, MessageSquare, Trash2 } from 'npm:lucide';
+        
+        // Initialize only the icons we need
+        createIcons({
+            icons: {
+                User,
+                Plus,
+                MessageSquare,
+                Trash2
+            }
+        });
+    </script>
 </head>
 <body>
     <div id="app"></div>
     <script>
         // Initialize cardData
-        window.cardData = window.cardData || {};
+        globalThis.cardData = globalThis.cardData || {};
+        
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(() => console.log('Service Worker registered'))
+                .catch(err => console.error('Service Worker registration failed:', err));
+        }
         
         // Load the view after Alpine.js is ready
         function loadView() {
