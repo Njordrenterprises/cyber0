@@ -38,6 +38,12 @@
 }
 
 /* Card List */
+.cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
 .card-item {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
@@ -73,78 +79,38 @@
 }
 
 .card-creator {
-  color: var(--text-muted);
   font-size: 0.875rem;
-}
-
-/* Messages */
-.message-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-xs);
-}
-
-.message-author {
-  color: var(--primary);
   font-weight: 500;
-  text-shadow: 0 0 5px var(--primary-glow);
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
 }
 
-.message-time {
-  color: var(--text-muted);
-  font-size: 0.875rem;
-}
-
-/* Top section with delete button and title */
-.info-card .card-header {
+/* Card Header */
+.card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md);
-  position: relative;
-  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
-.info-card h2 {
-  color: var(--primary);
-  text-shadow: 0 0 10px var(--primary-glow);
-  margin: 0;
-  font-size: 1.5rem;
-  text-align: left;
-  flex: 1;
-}
-
-/* Card delete button */
-.info-card > .delete-btn {
-  position: absolute;
-  top: var(--spacing-md);
-  right: var(--spacing-md);
+.back-btn {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  color: #ff4757;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.2em;
-  opacity: 0.7;
-  padding: 0;
-  z-index: 10;
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: var(--input-radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
-.info-card > .delete-btn:hover {
-  opacity: 1;
-  transform: scale(1.1);
-  background: rgba(255, 71, 87, 0.1);
-  border-color: #ff4757;
-  box-shadow: 0 0 15px rgba(255, 71, 87, 0.3);
+.back-btn:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
+  color: var(--primary);
 }
 
 /* Input section */
-.info-card .input-container {
+.input-container {
   display: flex;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm);
@@ -155,7 +121,7 @@
   margin-bottom: var(--spacing-md);
 }
 
-.info-card .input-container input {
+.input-container input {
   flex: 1;
   background: var(--input-bg);
   border: 1px solid var(--input-border);
@@ -165,12 +131,12 @@
   font-size: 1rem;
 }
 
-.info-card .input-container input:focus {
+.input-container input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 15px var(--primary-glow);
 }
 
-.info-card .submit-btn {
+.submit-btn {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   color: var(--text-primary);
@@ -181,7 +147,7 @@
   text-shadow: 0 0 5px var(--primary-glow);
 }
 
-.info-card .submit-btn:hover {
+.submit-btn:hover {
   background: var(--card-bg-hover);
   border-color: var(--primary);
   box-shadow: 0 0 15px var(--primary-glow);
@@ -202,8 +168,10 @@
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   padding: var(--spacing-md);
+  padding-left: calc(var(--spacing-md) + 3px); /* Account for colored border */
   border-radius: var(--card-radius);
   transition: all 0.3s ease;
+  position: relative;
 }
 
 .message:hover {
@@ -211,22 +179,47 @@
   box-shadow: 0 0 15px var(--primary-glow);
 }
 
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.message-author {
+  font-weight: 600;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  font-size: 0.95rem;
+  opacity: 0.9;
+  margin-right: var(--spacing-sm);
+}
+
+.message-time {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
 .message-text {
-  color: var(--text-primary);
   margin: var(--spacing-xs) 0;
   line-height: 1.5;
   word-break: break-word;
+  font-size: 0.95rem;
+  opacity: 0.9;
 }
 
 .message-meta {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  font-size: 0.875rem;
-  color: var(--text-muted);
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--glass-border);
 }
 
-.message .delete-btn {
+.delete-btn {
   background: none;
   border: none;
   color: var(--text-muted);
@@ -234,17 +227,41 @@
   border-radius: var(--input-radius);
   font-size: 1.25rem;
   line-height: 1;
-  position: static;
-  width: auto;
-  height: auto;
+  cursor: pointer;
   opacity: 0.7;
+  transition: all 0.3s ease;
 }
 
-.message .delete-btn:hover {
+.delete-btn:hover {
   opacity: 1;
-  color: var(--primary);
-  text-shadow: 0 0 10px var(--primary-glow);
+  color: #ff4757;
   transform: scale(1.1);
+}
+
+/* Add Card Button */
+.add-card-btn {
+  position: fixed;
+  bottom: var(--spacing-lg);
+  right: var(--spacing-lg);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: var(--glass-shadow);
+}
+
+.add-card-btn:hover {
+  transform: scale(1.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
 }
 
 @keyframes scanline {
@@ -254,4 +271,41 @@
   100% {
     transform: translateX(100%);
   }
+}
+
+/* Username styles */
+.username,
+.card-creator,
+.message-author,
+.card-author {
+  font-weight: 600 !important;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Title username */
+.username {
+  font-size: 0.9rem !important;
+}
+
+/* Card usernames */
+.card-creator,
+.card-author {
+  font-size: 0.875rem !important;
+  margin-top: var(--spacing-xs) !important;
+}
+
+/* Message username */
+.message-author {
+  font-size: 0.95rem !important;
+  margin-right: var(--spacing-sm) !important;
+}
+
+/* Ensure color styles are applied */
+.username,
+.card-creator,
+.message-author,
+.card-author {
+  color: inherit !important;
+  opacity: 0.9 !important;
 }

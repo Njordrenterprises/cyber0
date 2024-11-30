@@ -8,6 +8,24 @@
        cards: [],
        modalOpen: false,
        newCardName: '',
+       getUsernameColor(username) {
+         // Simple hash function to generate consistent colors
+         let hash = 0;
+         for (let i = 0; i < username.length; i++) {
+           hash = username.charCodeAt(i) + ((hash << 5) - hash);
+         }
+         // Generate HSL color with high saturation and lightness
+         const hue = Math.abs(hash % 360);
+         return `hsl(${hue}, 85%, 75%)`;
+       },
+       getMessageStyle(username) {
+         const color = this.getUsernameColor(username);
+         return {
+           color: color,
+           textShadow: '0 0 5px rgba(0, 0, 0, 0.3)',
+           borderLeft: `3px solid ${color}`
+         };
+       },
        async init() {
          // Wait for cardData to be available
          while (!window.cardData?.info) {
@@ -76,6 +94,7 @@
                     class="card-name" 
                     x-text="card.name"></span>
               <span class="card-creator" 
+                    :style="{ color: getUsernameColor(card.createdBy.username) }"
                     x-text="'Created by ' + card.createdBy.username"></span>
             </div>
             <div class="card-actions">
@@ -101,9 +120,10 @@
 
       <div class="message-container">
         <template x-for="message in messages" :key="message.id">
-          <div class="message">
+          <div class="message" :style="getMessageStyle(message.author.username)">
             <div class="message-header">
-              <span class="message-author" x-text="message.author.username"></span>
+              <span class="message-author" 
+                    x-text="message.author.username"></span>
               <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
             </div>
             <div class="message-text" x-text="message.text"></div>
