@@ -1,7 +1,7 @@
 import { BaseCardRouter } from "../cardRouter.ts";
 
 export class InfoCardRouter extends BaseCardRouter {
-  constructor(userId: string = 'test-user') {
+  constructor(userId: string) {
     super('info', userId);
   }
 

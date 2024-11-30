@@ -71,9 +71,13 @@
       <div class="cards-list">
         <template x-for="card in cards" :key="card.id">
           <div class="card-item">
-            <span @click="viewCard(card.id)" 
-                  class="card-name" 
-                  x-text="card.name"></span>
+            <div class="card-info">
+              <span @click="viewCard(card.id)" 
+                    class="card-name" 
+                    x-text="card.name"></span>
+              <span class="card-creator" 
+                    x-text="'Created by ' + card.createdBy.username"></span>
+            </div>
             <div class="card-actions">
               <button @click="deleteCard(card.id)" class="delete-btn">×</button>
             </div>
@@ -98,9 +102,12 @@
       <div class="message-container">
         <template x-for="message in messages" :key="message.id">
           <div class="message">
+            <div class="message-header">
+              <span class="message-author" x-text="message.author.username"></span>
+              <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
+            </div>
             <div class="message-text" x-text="message.text"></div>
             <div class="message-meta">
-              <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
               <button class="delete-btn" @click="deleteMessage(message.id)">×</button>
             </div>
           </div>

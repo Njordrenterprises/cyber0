@@ -12,48 +12,56 @@ interface User {
   lastSeen: number;
 }
 
-export async function getOrCreateUser(req: Request): Promise<{ user: User; response?: Response }> {
+export async function getOrCreateUser(req: Request): Promise<{ user: User; response: Response }> {
   const kv = getKv();
   const cookies = parse(req.headers.get('cookie') || '');
   const userId = cookies[USER_COOKIE_NAME];
+
+  let user: User;
+  const response = new Response();
 
   if (userId) {
     // Try to get existing user
     const result = await kv.get<User>(['users', userId]);
     if (result.value) {
       // Update last seen
-      const updatedUser = {
+      user = {
         ...result.value,
         lastSeen: Date.now()
       };
-      await kv.set(['users', userId], updatedUser);
-      return { user: updatedUser };
+      await kv.set(['users', userId], user);
+    } else {
+      // User ID in cookie not found in KV, create new user
+      user = {
+        id: crypto.randomUUID(),
+        username: generateUsername(),
+        created: Date.now(),
+        lastSeen: Date.now()
+      };
+      await kv.set(['users', user.id], user);
     }
+  } else {
+    // Create new user
+    user = {
+      id: crypto.randomUUID(),
+      username: generateUsername(),
+      created: Date.now(),
+      lastSeen: Date.now()
+    };
+    await kv.set(['users', user.id], user);
   }
 
-  // Create new user
-  const newUser: User = {
-    id: crypto.randomUUID(),
-    username: generateUsername(),
-    created: Date.now(),
-    lastSeen: Date.now()
-  };
-
-  // Save user to KV
-  await kv.set(['users', newUser.id], newUser);
-
-  // Create response with cookie
-  const response = new Response();
-  const cookieValue = serialize(USER_COOKIE_NAME, newUser.id, {
+  // Always set the cookie in the response
+  const cookieValue = serialize(USER_COOKIE_NAME, user.id, {
     path: '/',
     httpOnly: true,
-    secure: true,
-    sameSite: 'Strict',
+    secure: false,
+    sameSite: 'Lax',
     maxAge: COOKIE_MAX_AGE
   });
   response.headers.set('Set-Cookie', cookieValue);
 
-  return { user: newUser, response };
+  return { user, response };
 }
 
 export async function getUserById(userId: string): Promise<User | null> {

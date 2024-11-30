@@ -37,6 +37,65 @@
   gap: var(--spacing-md);
 }
 
+/* Card List */
+.card-item {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  padding: var(--spacing-md);
+  border-radius: var(--card-radius);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.card-item:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.card-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.card-name {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.card-name:hover {
+  color: var(--primary);
+  text-shadow: 0 0 10px var(--primary-glow);
+}
+
+.card-creator {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* Messages */
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.message-author {
+  color: var(--primary);
+  font-weight: 500;
+  text-shadow: 0 0 5px var(--primary-glow);
+}
+
+.message-time {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
 /* Top section with delete button and title */
 .info-card .card-header {
   display: flex;
@@ -154,14 +213,14 @@
 
 .message-text {
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin: var(--spacing-xs) 0;
   line-height: 1.5;
   word-break: break-word;
 }
 
 .message-meta {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   font-size: 0.875rem;
   color: var(--text-muted);

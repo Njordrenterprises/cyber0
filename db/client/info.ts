@@ -17,7 +17,7 @@ export function getInfoCardMethods(): InfoCardMethods {
         });
       }
     },
-    userId: 'test-user',
+    userId: window.userContext?.id || 'test-user',
     handleKvUpdate: async (cardId: string, newMessage: string) => {
       try {
         const response = await fetch('/cards/info/message/add', {
@@ -121,10 +121,7 @@ export function getInfoCardScript(): string {
       
       async loadCardMessages(cardId) {
         try {
-          const userId = window.userContext?.id;
-          if (!userId) throw new Error('No user context found');
-          
-          const response = await fetch(\`/kv/get?key=cards,info,\${userId},\${cardId}\`);
+          const response = await fetch(\`/kv/get?key=cards,info,data,\${cardId}\`);
           if (!response.ok) {
             throw new Error(\`Failed to load messages: \${response.status}\`);
           }
