@@ -78,13 +78,6 @@
   text-shadow: 0 0 10px var(--primary-glow);
 }
 
-.card-creator {
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
-  opacity: 0.9;
-}
-
 /* Card Header */
 .card-header {
   display: flex;
@@ -168,10 +161,8 @@
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   padding: var(--spacing-md);
-  padding-left: calc(var(--spacing-md) + 3px); /* Account for colored border */
   border-radius: var(--card-radius);
   transition: all 0.3s ease;
-  position: relative;
 }
 
 .message:hover {
@@ -188,14 +179,6 @@
   border-bottom: 1px solid var(--glass-border);
 }
 
-.message-author {
-  font-weight: 600;
-  text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
-  font-size: 0.95rem;
-  opacity: 0.9;
-  margin-right: var(--spacing-sm);
-}
-
 .message-time {
   color: var(--text-muted);
   font-size: 0.8rem;
@@ -207,7 +190,6 @@
   line-height: 1.5;
   word-break: break-word;
   font-size: 0.95rem;
-  opacity: 0.9;
 }
 
 .message-meta {
@@ -238,32 +220,6 @@
   transform: scale(1.1);
 }
 
-/* Add Card Button */
-.add-card-btn {
-  position: fixed;
-  bottom: var(--spacing-lg);
-  right: var(--spacing-lg);
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  color: var(--text-primary);
-  font-size: 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: var(--glass-shadow);
-}
-
-.add-card-btn:hover {
-  transform: scale(1.1);
-  border-color: var(--primary);
-  box-shadow: 0 0 15px var(--primary-glow);
-}
-
 @keyframes scanline {
   0% {
     transform: translateX(-100%);
@@ -271,41 +227,4 @@
   100% {
     transform: translateX(100%);
   }
-}
-
-/* Username styles */
-.username,
-.card-creator,
-.message-author,
-.card-author {
-  font-weight: 600 !important;
-  text-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
-  transition: all 0.3s ease !important;
-}
-
-/* Title username */
-.username {
-  font-size: 0.9rem !important;
-}
-
-/* Card usernames */
-.card-creator,
-.card-author {
-  font-size: 0.875rem !important;
-  margin-top: var(--spacing-xs) !important;
-}
-
-/* Message username */
-.message-author {
-  font-size: 0.95rem !important;
-  margin-right: var(--spacing-sm) !important;
-}
-
-/* Ensure color styles are applied */
-.username,
-.card-creator,
-.message-author,
-.card-author {
-  color: inherit !important;
-  opacity: 0.9 !important;
 }

@@ -1,5 +1,4 @@
-import type { InfoCardMethods, CardEntry, BaseCard } from './types.ts';
-import { getCardData } from './types.ts';
+import type { InfoCardMethods, BaseCard } from './types.ts';
 
 export function getInfoCardMethods(): InfoCardMethods {
   return {
@@ -17,7 +16,7 @@ export function getInfoCardMethods(): InfoCardMethods {
         });
       }
     },
-    userId: window.userContext?.id || 'test-user',
+    userId: globalThis.userContext?.id || 'test-user',
     handleKvUpdate: async (cardId: string, newMessage: string) => {
       try {
         const response = await fetch('/cards/info/message/add', {
@@ -86,8 +85,8 @@ export function getInfoCardMethods(): InfoCardMethods {
 export function getInfoCardScript(): string {
   return `
     // Initialize cardData
-    window.cardData = window.cardData || {};
-    window.cardData.info = window.cardData.info || {
+    globalThis.cardData = globalThis.cardData || {};
+    globalThis.cardData.info = globalThis.cardData.info || {
       async getCards() {
         const response = await fetch('/cards/info/list');
         if (!response.ok) {

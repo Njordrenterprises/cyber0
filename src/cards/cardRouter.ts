@@ -69,7 +69,7 @@ export class BaseCardRouter implements CardRouter {
     }
 
     try {
-      const card = await createCard(this.userId, user.username, data.name, this.cardType);
+      const card = await createCard(this.userId, user.username, data.name, this.cardType, user.color);
       return new Response(JSON.stringify(card), {
         headers: { 'Content-Type': 'application/json' }
       });
@@ -123,7 +123,7 @@ export class BaseCardRouter implements CardRouter {
     }
 
     try {
-      const message = await addMessage(this.userId, user.username, this.cardType, data.cardId, data.text);
+      const message = await addMessage(this.userId, user.username, this.cardType, data.cardId, data.text, user.color);
       return new Response(JSON.stringify(message), {
         headers: { 'Content-Type': 'application/json' }
       });

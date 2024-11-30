@@ -11,6 +11,7 @@ export interface BaseCard {
   createdBy: {
     id: string;
     username: string;
+    color: string;
   };
 }
 
@@ -21,6 +22,7 @@ export interface CardMessage {
   author: {
     id: string;
     username: string;
+    color: string;
   };
 }
 
@@ -31,11 +33,12 @@ export interface CardEntry {
   owner: {
     id: string;
     username: string;
+    color: string;
   };
 }
 
 // Shared card management functions
-export async function createCard(userId: string, username: string, name: string, type: string): Promise<BaseCard> {
+export async function createCard(userId: string, username: string, name: string, type: string, color: string): Promise<BaseCard> {
   const listKey = ['cards', type, 'global', 'list']; // Fixed key format
   const kv = getKv();
   const result = await kv.get(listKey);
@@ -48,7 +51,8 @@ export async function createCard(userId: string, username: string, name: string,
     created: Date.now(),
     createdBy: {
       id: userId,
-      username
+      username,
+      color
     }
   };
 
@@ -63,7 +67,8 @@ export async function createCard(userId: string, username: string, name: string,
     timestamp: Date.now(),
     owner: {
       id: userId,
-      username
+      username,
+      color
     }
   };
   await kv.set(cardDataKey, initialData);
@@ -78,7 +83,7 @@ export async function createCard(userId: string, username: string, name: string,
   return card;
 }
 
-export async function deleteCard(userId: string, cardId: string, type: string): Promise<void> {
+export async function deleteCard(_userId: string, cardId: string, type: string): Promise<void> {
   const kv = getKv();
   
   // Get global list
@@ -109,7 +114,7 @@ export async function getCards(_userId: string, type: string): Promise<BaseCard[
   return (result.value || []).sort((a, b) => b.created - a.created);
 }
 
-export async function addMessage(userId: string, username: string, type: string, cardId: string, text: string): Promise<CardMessage> {
+export async function addMessage(userId: string, username: string, type: string, cardId: string, text: string, color: string): Promise<CardMessage> {
   const cardDataKey = ['cards', type, 'data', cardId];
   const kv = getKv();
   
@@ -143,7 +148,8 @@ export async function addMessage(userId: string, username: string, type: string,
     timestamp: Date.now(),
     author: {
       id: userId,
-      username
+      username,
+      color
     }
   };
   
@@ -176,7 +182,7 @@ export async function addMessage(userId: string, username: string, type: string,
   return message;
 }
 
-export async function deleteMessage(userId: string, type: string, cardId: string, messageId: string): Promise<void> {
+export async function deleteMessage(_userId: string, type: string, cardId: string, messageId: string): Promise<void> {
   const cardDataKey = ['cards', type, 'data', cardId];
   const kv = getKv();
   

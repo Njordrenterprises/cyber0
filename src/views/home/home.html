@@ -6,6 +6,12 @@
        maxReconnectAttempts: 5,
        reconnectDelay: 2000,
        user: null,
+       async newIdentity() {
+         // Delete the cookie
+         document.cookie = 'cyber_user_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+         // Reload the page to get a new identity
+         window.location.reload();
+       },
        async init() {
          // Wait for cardData to be available
          while (!window.cardData?.info) {
@@ -14,6 +20,13 @@
          
          // Set user from context
          this.user = window.userContext;
+         console.log('User Identity:', {
+           id: this.user.id,
+           username: this.user.username,
+           color: this.user.color,
+           created: new Date(this.user.created).toLocaleString(),
+           lastSeen: new Date(this.user.lastSeen).toLocaleString()
+         });
          
          // Load cards
          await this.loadCards();
@@ -130,7 +143,10 @@
   <div class="header">
     <h1>Cyber Framework</h1>
     <div class="user-info" x-show="user">
-      <span class="username" x-text="user?.username"></span>
+      <span class="username" 
+            :style="{ '--user-color': user.color }" 
+            x-text="user.username"></span>
+      <button @click="newIdentity" class="identity-btn">New Identity</button>
     </div>
     <!-- New Card Button -->
     <button type="button" 
@@ -212,9 +228,11 @@
                 class="delete-btn">×</button>
         <div class="info-content">
           <div class="card-header">
-            <h2 x-text="card.name"></h2>
+            <h2 :style="{ color: card.createdBy.color }" x-text="card.name"></h2>
             <div class="card-meta">
-              <span class="card-author">by <span x-text="card.createdBy.username"></span></span>
+              <span class="card-author">by <span 
+                :style="{ color: card.createdBy.color }"
+                x-text="card.createdBy.username"></span></span>
             </div>
           </div>
           
@@ -230,7 +248,9 @@
               <div class="message">
                 <div class="message-text" x-text="message.text"></div>
                 <div class="message-meta">
-                  <span class="message-author" x-text="message.author.username"></span>
+                  <span class="message-author" 
+                        :style="{ color: message.author.color }"
+                        x-text="message.author.username"></span>
                   <span class="message-time" x-text="new Date(message.timestamp).toLocaleString()"></span>
                   <button class="delete-btn" @click="handleDelete(message.id)">×</button>
                 </div>
