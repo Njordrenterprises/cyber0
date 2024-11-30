@@ -40,7 +40,7 @@ export async function createCard(userId: string, name: string, type: string): Pr
   await kv.set(key, cards);
   
   // Broadcast card creation
-  await broadcast({
+  broadcast({
     type: 'update',
     key: key.join(','),
     value: cards
@@ -64,7 +64,7 @@ export async function deleteCard(userId: string, cardId: string, type: string): 
   await kv.delete(dataKey);
   
   // Broadcast card deletion
-  await broadcast({
+  broadcast({
     type: 'update',
     key: listKey.join(','),
     value: updatedCards
@@ -103,7 +103,7 @@ export async function addMessage(userId: string, type: string, cardId: string, t
   
   // Save and broadcast
   await kv.set(key, updatedEntry);
-  await broadcast({
+  broadcast({
     type: 'update',
     key: key.join(','),
     value: updatedEntry
@@ -143,7 +143,7 @@ export async function deleteMessage(userId: string, type: string, cardId: string
   console.log('KV set complete');
   
   console.log('Broadcasting update');
-  await broadcast({
+  broadcast({
     type: 'update',
     key: key.join(','),
     value: updatedEntry

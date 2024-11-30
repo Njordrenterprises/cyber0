@@ -1,10 +1,9 @@
 import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
-import infoCard from "./src/cards/info/info.ts";
+import { InfoCardRouter } from "./src/cards/info/infoRouter.ts";
 import * as db from "./db/kv.ts";
-import { createCard, deleteCard, getCards, addMessage, deleteMessage } from "./src/cards/cards.ts";
-import { broadcast, initBroadcast } from "./src/ws/broadcast.ts";
-import { validateContentType, validateCardInput, validateMessageInput, validateKvKey, validateCardExists } from "./src/middleware/validation.ts";
-import type { KvSetRequest, CreateCardRequest, MessageRequest, DeleteCardRequest as _DeleteCardRequest, DeleteMessageRequest as _DeleteMessageRequest, ErrorResponse } from "./src/types.ts";
+import { initBroadcast, closeBroadcast } from "./src/ws/broadcast.ts";
+import { validateKvKey } from "./src/middleware/validation.ts";
+import type { KvSetRequest, ErrorResponse } from "./src/types.ts";
 
 // Initialize KV database
 await db.initKv();
@@ -12,9 +11,11 @@ await db.initKv();
 // Initialize broadcast channel
 await initBroadcast();
 
-// Initialize cards
-console.log('Initializing cards...');
-await infoCard.init('test-user');
+// Initialize card routers
+const infoCardRouter = new InfoCardRouter('test-user');
+
+// Keep track of active SSE connections
+const clients = new Set<ReadableStreamDefaultController>();
 
 // File loading functions
 async function loadView(name: string): Promise<string> {
@@ -27,7 +28,6 @@ async function loadView(name: string): Promise<string> {
   }
 }
 
-// Load card template
 async function loadCardTemplate(name: string): Promise<string> {
   try {
     const content = await Deno.readTextFile(`./src/cards/${name}/${name}.html`);
@@ -38,54 +38,78 @@ async function loadCardTemplate(name: string): Promise<string> {
   }
 }
 
-async function parseJsonSafely<T>(req: Request): Promise<{ data: T | null; error: Response | null }> {
-  try {
-    const data = await req.json();
-    return { data: data as T, error: null };
-  } catch (_error) {
-    return {
-      data: null,
-      error: new Response(JSON.stringify({ error: 'Invalid JSON format' } satisfies ErrorResponse), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      })
-    };
-  }
-}
-
 async function handler(req: Request): Promise<Response> {
   const url = new URL(req.url);
   console.log(`${req.method} ${url.pathname}`);
 
-  // Validate content type for POST requests
-  if (req.method === 'POST') {
-    const contentTypeError = validateContentType(req);
-    if (contentTypeError) return contentTypeError;
+  // Add CORS headers for all responses
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  };
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
   // Create SSE endpoint for real-time updates
   if (url.pathname === '/events') {
     const channel = new BroadcastChannel("cyber-updates");
+    let controller: ReadableStreamDefaultController;
+
     const stream = new ReadableStream({
-      start(controller) {
+      start(c) {
+        controller = c;
+        clients.add(controller);
+        
+        // Send initial connection message
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('data: {"type":"connected"}\n\n'));
+
         channel.onmessage = (event) => {
-          const encoder = new TextEncoder();
-          const data = encoder.encode(`data: ${JSON.stringify(event.data)}\n\n`);
-          controller.enqueue(data);
+          try {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(`data: ${JSON.stringify(event.data)}\n\n`);
+            controller.enqueue(data);
+          } catch (error) {
+            console.error('Error sending SSE message:', error);
+          }
         };
       },
       cancel() {
+        clients.delete(controller);
         channel.close();
       }
     });
 
     return new Response(stream, {
       headers: {
+        ...corsHeaders,
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive'
       }
     });
+  }
+
+  // Handle card routes
+  if (url.pathname.startsWith('/cards/info/')) {
+    return infoCardRouter.handleRequest(req);
+  }
+
+  // Handle view loading
+  if (url.pathname.startsWith('/views/')) {
+    const viewName = url.pathname.split('/')[2];
+    try {
+      const content = await loadView(viewName);
+      return new Response(content, {
+        headers: { "Content-Type": "text/html" },
+      });
+    } catch (_error) {
+      return new Response("View Not Found", { status: 404 });
+    }
   }
 
   // Handle KV operations
@@ -103,13 +127,7 @@ async function handler(req: Request): Promise<Response> {
   }
 
   if (url.pathname === '/kv/set' && req.method === 'POST') {
-    const { data, error } = await parseJsonSafely<KvSetRequest>(req);
-    if (error) return error;
-    if (!data) return new Response(JSON.stringify({ error: 'Missing request data' } satisfies ErrorResponse), { 
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
-
+    const data = await req.json() as KvSetRequest;
     const keyError = validateKvKey(data.key);
     if (keyError) return keyError;
     
@@ -119,7 +137,6 @@ async function handler(req: Request): Promise<Response> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       }));
-      await broadcast({ type: 'update', key: data.key, value: data.value });
       return response;
     } catch (error) {
       console.error('Error handling KV set:', error);
@@ -127,125 +144,6 @@ async function handler(req: Request): Promise<Response> {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
-    }
-  }
-
-  // Handle CSS files
-  if (url.pathname.endsWith('.css')) {
-    try {
-      const content = await Deno.readTextFile(`.${url.pathname}`);
-      return new Response(content, {
-        headers: { 'Content-Type': 'text/css' }
-      });
-    } catch (error) {
-      console.error(`Error loading CSS file: ${url.pathname}`, error);
-      return new Response('Not Found', { status: 404 });
-    }
-  }
-
-  // Handle info card operations
-  if (url.pathname === '/cards/info/list' && req.method === 'GET') {
-    const cards = await getCards('test-user', 'info');
-    return new Response(JSON.stringify(cards), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  if (url.pathname === '/cards/info/create' && req.method === 'POST') {
-    const { data, error } = await parseJsonSafely<CreateCardRequest>(req);
-    if (error) return error;
-    if (!data) return new Response(JSON.stringify({ error: 'Missing request data' } satisfies ErrorResponse), { 
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const inputError = validateCardInput(data);
-    if (inputError) return inputError;
-
-    try {
-      const card = await createCard('test-user', data.name, 'info');
-      const cards = await getCards('test-user', 'info');
-      await broadcast({
-        type: 'update',
-        key: 'cards,info,test-user,list',
-        value: cards
-      });
-      return new Response(JSON.stringify(card), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error creating card:', error);
-      return new Response(JSON.stringify({ error: 'Error creating card' } satisfies ErrorResponse), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (url.pathname === '/cards/info/delete' && req.method === 'POST') {
-    const { cardId } = await req.json();
-    await deleteCard('test-user', cardId, 'info');
-    const cards = await getCards('test-user', 'info');
-    // Broadcast updated card list
-    await broadcast({
-      type: 'update',
-      key: 'cards,info,test-user,list',
-      value: cards
-    });
-    return new Response('OK');
-  }
-
-  // Handle message operations
-  if (url.pathname === '/cards/info/message/add' && req.method === 'POST') {
-    const { data, error } = await parseJsonSafely<MessageRequest>(req);
-    if (error) return error;
-    if (!data) return new Response(JSON.stringify({ error: 'Missing request data' } satisfies ErrorResponse), { 
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const inputError = validateMessageInput(data);
-    if (inputError) return inputError;
-
-    // Validate card exists
-    const cardError = await validateCardExists('test-user', data.cardId, 'info');
-    if (cardError) return cardError;
-
-    try {
-      const message = await addMessage('test-user', 'info', data.cardId, data.text);
-      return new Response(JSON.stringify(message), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error adding message:', error);
-      return new Response(JSON.stringify({ error: 'Error adding message' } satisfies ErrorResponse), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  if (url.pathname === '/cards/info/message/delete' && req.method === 'POST') {
-    try {
-      const { cardId, messageId } = await req.json();
-      await deleteMessage('test-user', 'info', cardId, messageId);
-      return new Response('OK');
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      return new Response('Error deleting message', { status: 500 });
-    }
-  }
-
-  // Handle view loading
-  if (url.pathname.startsWith('/views/')) {
-    const viewName = url.pathname.split('/')[2];
-    try {
-      const content = await loadView(viewName);
-      return new Response(content, {
-        headers: { "Content-Type": "text/html" },
-      });
-    } catch (_error) {
-      return new Response("View Not Found", { status: 404 });
     }
   }
 
@@ -272,5 +170,13 @@ async function handler(req: Request): Promise<Response> {
   });
 }
 
-console.log("Starting server on http://localhost:8000");
-Deno.serve({ port: 8000 }, handler);
+console.log("Starting server on http://0.0.0.0:8000");
+const server = Deno.serve({ port: 8000, hostname: "0.0.0.0" }, handler);
+
+// Handle server shutdown
+Deno.addSignalListener("SIGINT", () => {
+  console.log("Shutting down server...");
+  closeBroadcast();
+  server.shutdown();
+});
+

@@ -1,6 +1,10 @@
 <div class="view home"
      x-data="{
        cards: [],
+       eventSource: null,
+       reconnectAttempts: 0,
+       maxReconnectAttempts: 5,
+       reconnectDelay: 2000,
        async init() {
          // Wait for cardData to be available
          while (!window.cardData?.info) {
@@ -10,69 +14,108 @@
          await this.loadCards();
          
          // Set up EventSource if not already connected
-         if (!window.eventSource) {
-           const connectEventSource = () => {
-             const protocol = window.location.protocol;
-             const host = window.location.hostname === 'localhost' || window.location.hostname === '0.0.0.0' 
-               ? `${window.location.hostname}:8000`
-               : 'cyber0.deno.dev';
-             const eventsUrl = `${protocol}//${host}/events`;
-             
-             console.log('Connecting to EventSource:', eventsUrl);
-             
-             const eventSource = new EventSource(eventsUrl);
-             
-             eventSource.onopen = () => {
-               console.log('EventSource connection established');
-               window.eventSource = eventSource;
-             };
-             
-             eventSource.onerror = (error) => {
-               console.error('EventSource error:', error);
-               window.eventSource = null;
-               eventSource.close();
-               // Try to reconnect after error
-               setTimeout(connectEventSource, 2000);
-             };
-             
-             eventSource.onmessage = (event) => {
-               const data = JSON.parse(event.data);
-               console.log('EventSource message received:', data);
-               
-               if (data.type === 'update') {
-                 // Handle card list updates
-                 if (data.key === 'cards,info,test-user,list') {
-                   this.cards = data.value.sort((a, b) => b.created - a.created);
-                 } else {
-                   // Handle individual card updates
-                   const cardMatch = data.key.match(/^cards,info,test-user,([^,]+)$/);
-                   if (cardMatch) {
-                     const cardId = cardMatch[1];
-                     console.log('Dispatching message update for card:', cardId, data.value.messages);
-                     window.dispatchEvent(new CustomEvent(`card-messages-${cardId}`, {
-                       detail: [...data.value.messages].sort((a, b) => b.timestamp - a.timestamp)
-                     }));
-                   }
-                 }
-               }
-             };
-           };
-           
-           connectEventSource();
+         this.connectEventSource();
+
+         // Clean up on page unload
+         window.addEventListener('beforeunload', () => this.cleanup());
+       },
+       cleanup() {
+         if (this.eventSource) {
+           console.log('Cleaning up EventSource connection');
+           this.eventSource.close();
+           this.eventSource = null;
          }
        },
+       async reconnect() {
+         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+           console.error('Max reconnection attempts reached');
+           return;
+         }
+         
+         this.reconnectAttempts++;
+         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+         console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+         
+         await new Promise(resolve => setTimeout(resolve, delay));
+         this.connectEventSource();
+       },
+       connectEventSource() {
+         if (this.eventSource?.readyState === 1) {
+           console.log('EventSource already connected');
+           return;
+         }
+
+         if (this.eventSource) {
+           this.eventSource.close();
+           this.eventSource = null;
+         }
+
+         const eventsUrl = '/events';
+         console.log('Connecting to EventSource:', eventsUrl);
+         
+         this.eventSource = new EventSource(eventsUrl);
+         
+         this.eventSource.onopen = () => {
+           console.log('EventSource connection established');
+           this.reconnectAttempts = 0;
+         };
+         
+         this.eventSource.onerror = (error) => {
+           console.error('EventSource error:', error);
+           if (this.eventSource) {
+             this.eventSource.close();
+             this.eventSource = null;
+           }
+           this.reconnect();
+         };
+         
+         this.eventSource.onmessage = (event) => {
+           try {
+             const data = JSON.parse(event.data);
+             console.log('EventSource message received:', data);
+             
+             if (data.type === 'update') {
+               // Handle card list updates
+               if (data.key === 'cards,info,test-user,list') {
+                 this.cards = data.value.sort((a, b) => b.created - a.created);
+               } else {
+                 // Handle individual card updates
+                 const cardMatch = data.key.match(/^cards,info,test-user,([^,]+)$/);
+                 if (cardMatch) {
+                   const cardId = cardMatch[1];
+                   console.log('Dispatching message update for card:', cardId, data.value.messages);
+                   window.dispatchEvent(new CustomEvent(`card-messages-${cardId}`, {
+                     detail: [...data.value.messages].sort((a, b) => b.timestamp - a.timestamp)
+                   }));
+                 }
+               }
+             }
+           } catch (error) {
+             console.error('Error processing EventSource message:', error);
+           }
+         };
+       },
        async loadCards() {
-         const fetchedCards = await window.cardData.info.getCards();
-         // Sort cards by created timestamp, newest first
-         this.cards = fetchedCards.sort((a, b) => b.created - a.created);
+         try {
+           const fetchedCards = await window.cardData.info.getCards();
+           // Sort cards by created timestamp, newest first
+           this.cards = fetchedCards.sort((a, b) => b.created - a.created);
+         } catch (error) {
+           console.error('Error loading cards:', error);
+         }
        },
        async createCard(name) {
          if (!name.trim()) return;
-         await window.cardData.info.createCard(name);
-         await this.loadCards();
+         try {
+           await window.cardData.info.createCard(name);
+           await this.loadCards();
+         } catch (error) {
+           console.error('Error creating card:', error);
+         }
        }
      }"
-     x-init="init">
+     x-init="init"
+     @beforeunload.window="cleanup">
   <div class="header">
     <h1>Cyber Framework</h1>
     <!-- New Card Button -->
@@ -115,8 +158,12 @@
                }
              },
              async refreshMessages() {
-               const messages = await this.cardData.loadCardMessages(card.id);
-               this.messages = [...messages].sort((a, b) => b.timestamp - a.timestamp);
+               try {
+                 const messages = await this.cardData.loadCardMessages(card.id);
+                 this.messages = [...messages].sort((a, b) => b.timestamp - a.timestamp);
+               } catch (error) {
+                 console.error('Error refreshing messages:', error);
+               }
              },
              async submitMessage() {
                if (!this.inputValue.trim()) return;
@@ -139,6 +186,7 @@
                }
                try {
                  await this.cardData.handleKvDelete(card.id, messageId);
+                 await this.refreshMessages();
                } catch (error) {
                  console.error('Error deleting message:', error);
                }
