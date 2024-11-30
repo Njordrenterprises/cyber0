@@ -146,7 +146,7 @@
            }"
            x-init="init"
            @destroy.window="destroy">
-        <button @click="window.cardData.info.deleteCard(card.id).then(() => { $dispatch('refresh-cards'); window.location.reload(); })" 
+        <button @click="window.cardData.info.deleteCard(card.id)" 
                 class="delete-btn">×</button>
         <div class="info-content">
           <div class="card-header">
