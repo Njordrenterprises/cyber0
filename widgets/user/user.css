@@ -38,23 +38,6 @@
   animation: scanline 2s linear infinite;
 }
 
-.user-avatar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.user-avatar i {
-  width: 1.2rem;
-  height: 1.2rem;
-  stroke: #00ff00;
-  transition: transform 0.3s ease;
-}
-
-.user-display:hover .user-avatar i {
-  transform: scale(1.2);
-}
-
 .user-info {
   display: flex;
   flex-direction: column;
