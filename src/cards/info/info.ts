@@ -273,7 +273,7 @@ export class InfoCardRouter extends BaseCardRouter {
     }
   }
 
-  protected override async handleGetNestedCards(cardId: string, req: Request): Promise<Response> {
+  protected override async handleGetNestedCards(cardId: string): Promise<Response> {
     try {
       const card = await this.getCard(cardId);
       const nestedCards = card.metadata.nestedCards || [];

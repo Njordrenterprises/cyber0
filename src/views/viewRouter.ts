@@ -104,7 +104,7 @@ export class ViewRouter {
               'Set-Cookie': user.cookie || ''
             }
           });
-        } catch (error) {
+        } catch (_error) {
           return new Response(JSON.stringify({ error: 'View not found' }), {
             status: 404,
             headers: { 'Content-Type': 'application/json' }
@@ -123,7 +123,7 @@ export class ViewRouter {
               'Set-Cookie': user.cookie || ''
             }
           });
-        } catch (error) {
+        } catch (_error) {
           return new Response(JSON.stringify({ error: 'Widget not found' }), {
             status: 404,
             headers: { 'Content-Type': 'application/json' }

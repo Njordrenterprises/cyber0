@@ -77,7 +77,7 @@ export class DbRouter {
     }
   }
 
-  async handleRequest(req: Request): Promise<Response> {
+  handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname.replace('/db/', '');
     
