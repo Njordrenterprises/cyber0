@@ -95,6 +95,9 @@ export abstract class BaseCardRouter implements CardOperations {
   }
 
   async deleteCard(cardId: string): Promise<void> {
+    const meta = await kv.get<KvCardMeta>(['cards', this.cardType, 'meta', cardId]);
+    if (!meta?.value) throw new Error('not found');
+
     await Promise.all([
       kvBroadcast.broadcastDelete(['cards', this.cardType, 'meta', cardId]),
       kvBroadcast.broadcastDelete(['cards', this.cardType, 'data', cardId])
@@ -103,7 +106,7 @@ export abstract class BaseCardRouter implements CardOperations {
 
   async getCard(cardId: string): Promise<BaseCard> {
     const meta = await kv.get<KvCardMeta>(['cards', this.cardType, 'meta', cardId]);
-    if (!meta?.value) throw new Error('Card not found');
+    if (!meta?.value) throw new Error('not found');
     
     return {
       id: meta.value.id,
@@ -125,43 +128,39 @@ export abstract class BaseCardRouter implements CardOperations {
   }
 
   async getCards(): Promise<BaseCard[]> {
-    try {
-      const cards: BaseCard[] = [];
-      const iterator = kv.list<KvCardMeta>({ prefix: ['cards', this.cardType, 'meta'] });
-      
-      for await (const entry of iterator) {
-        if (entry.value) {
-          cards.push({
-            id: entry.value.id,
-            name: entry.value.name,
-            type: entry.value.type,
-            created: entry.value.created,
-            lastUpdated: entry.value.lastUpdated,
-            createdBy: entry.value.createdBy,
-            content: {},
-            metadata: {
-              version: '1.0.0',
-              permissions: {
-                canView: ['human', 'ai'],
-                canEdit: [entry.value.createdBy.id],
-                canDelete: [entry.value.createdBy.id]
-              }
+    const cards: BaseCard[] = [];
+    const iterator = kv.list<KvCardMeta>({ prefix: ['cards', this.cardType, 'meta'] });
+    
+    for await (const entry of iterator) {
+      if (entry.value) {
+        cards.push({
+          id: entry.value.id,
+          name: entry.value.name,
+          type: entry.value.type,
+          created: entry.value.created,
+          lastUpdated: entry.value.lastUpdated,
+          createdBy: entry.value.createdBy,
+          content: {},
+          metadata: {
+            version: '1.0.0',
+            permissions: {
+              canView: ['human', 'ai'],
+              canEdit: [entry.value.createdBy.id],
+              canDelete: [entry.value.createdBy.id]
             }
-          });
-        }
+          }
+        });
       }
-      
-      return cards;
-    } catch (error) {
-      console.error('Error getting cards:', error);
-      if (error instanceof Error) {
-        throw new Error(`Failed to get cards: ${error.message}`);
-      }
-      throw new Error('Failed to get cards: Unknown error');
     }
+    
+    return cards;
   }
 
   protected async addMessage(cardId: string, text: string): Promise<CardMessage> {
+    const key: KvKey = ['cards', this.cardType, 'data', cardId];
+    const entry = await kv.get<KvCardData>(key);
+    if (!entry?.value) throw new Error('not found');
+
     const message: CardMessage = {
       id: crypto.randomUUID(),
       cardId,
@@ -170,10 +169,6 @@ export abstract class BaseCardRouter implements CardOperations {
       author: this.user,
       type: 'text'
     };
-
-    const key: KvKey = ['cards', this.cardType, 'data', cardId];
-    const entry = await kv.get<KvCardData>(key);
-    if (!entry?.value) throw new Error('Card not found');
 
     const messages = [...entry.value.messages, message];
     const now = Date.now();
@@ -190,7 +185,7 @@ export abstract class BaseCardRouter implements CardOperations {
   protected async deleteMessage(cardId: string, messageId: string): Promise<void> {
     const key: KvKey = ['cards', this.cardType, 'data', cardId];
     const entry = await kv.get<KvCardData>(key);
-    if (!entry?.value) throw new Error('Card not found');
+    if (!entry?.value) throw new Error('not found');
 
     const messages = entry.value.messages.filter((m: CardMessage) => m.id !== messageId);
     const now = Date.now();
@@ -218,7 +213,13 @@ export abstract class BaseCardRouter implements CardOperations {
     }
 
     // Handle API endpoints
-    if (path === 'api') {
+    if (path.startsWith('api')) {
+      const subPath = path.replace('api/', '');
+      
+      if (subPath === 'messages' && req.method === 'GET') {
+        return this.handleMessagesList(req);
+      }
+
       switch (req.method) {
         case 'GET':
           return this.handleApiGet(req);
@@ -235,19 +236,11 @@ export abstract class BaseCardRouter implements CardOperations {
   }
 
   protected async handleList(): Promise<Response> {
-    try {
-      const cards = await this.getCards();
-      return new Response(JSON.stringify(cards), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error listing cards:', error);
-      return new Response(JSON.stringify({ error: 'Failed to list cards' }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' }
-      });
-    }
+    const cards = await this.getCards();
+    return new Response(JSON.stringify(cards), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
   }
 
   protected async handleCreate(req: Request): Promise<Response> {
@@ -290,11 +283,21 @@ export abstract class BaseCardRouter implements CardOperations {
         });
       }
 
-      await this.deleteCard(data.cardId);
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
+      try {
+        await this.deleteCard(data.cardId);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'not found') {
+          return new Response(JSON.stringify({ error: 'Card not found' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' }
+          });
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('Error deleting card:', error);
       if (error instanceof Error && error.message.includes('invalid json')) {
@@ -321,20 +324,57 @@ export abstract class BaseCardRouter implements CardOperations {
         });
       }
 
-      const card = await this.getCard(cardId);
-      return new Response(JSON.stringify(card), {
-        status: 200,
+      try {
+        const card = await this.getCard(cardId);
+        return new Response(JSON.stringify(card), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'not found') {
+          return new Response(JSON.stringify({ error: 'Card not found' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' }
+          });
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error getting card:', error);
+      return new Response(JSON.stringify({ error: 'Failed to get card' }), {
+        status: 500,
         headers: { 'content-type': 'application/json' }
       });
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('not found')) {
+    }
+  }
+
+  protected async handleMessagesList(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const cardId = url.searchParams.get('cardId');
+    if (!cardId) {
+      return new Response(JSON.stringify({ error: 'Card ID is required' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+
+    try {
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<KvCardData>(key);
+      if (!entry?.value) {
         return new Response(JSON.stringify({ error: 'Card not found' }), {
           status: 404,
           headers: { 'content-type': 'application/json' }
         });
       }
-      console.error('Error getting card:', error);
-      return new Response(JSON.stringify({ error: 'Failed to get card' }), {
+
+      return new Response(JSON.stringify(entry.value.messages || []), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error listing messages:', error);
+      return new Response(JSON.stringify({ error: 'Failed to list messages' }), {
         status: 500,
         headers: { 'content-type': 'application/json' }
       });
@@ -351,25 +391,23 @@ export abstract class BaseCardRouter implements CardOperations {
         });
       }
 
-      const message = await this.addMessage(data.cardId, data.text);
-      return new Response(JSON.stringify(message), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
+      try {
+        const message = await this.addMessage(data.cardId, data.text);
+        return new Response(JSON.stringify(message), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'not found') {
+          return new Response(JSON.stringify({ error: 'Card not found' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' }
+          });
+        }
+        throw error;
+      }
     } catch (error) {
-      if (error instanceof Error && error.message.includes('not found')) {
-        return new Response(JSON.stringify({ error: 'Card not found' }), {
-          status: 404,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
       console.error('Error adding message:', error);
-      if (error instanceof Error && error.message.includes('invalid json')) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
       return new Response(JSON.stringify({ error: 'Failed to add message' }), {
         status: 500,
         headers: { 'content-type': 'application/json' }
@@ -387,25 +425,23 @@ export abstract class BaseCardRouter implements CardOperations {
         });
       }
 
-      await this.deleteMessage(data.cardId, data.messageId);
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
+      try {
+        await this.deleteMessage(data.cardId, data.messageId);
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'not found') {
+          return new Response(JSON.stringify({ error: 'Card or message not found' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' }
+          });
+        }
+        throw error;
+      }
     } catch (error) {
-      if (error instanceof Error && error.message.includes('not found')) {
-        return new Response(JSON.stringify({ error: 'Card or message not found' }), {
-          status: 404,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
       console.error('Error deleting message:', error);
-      if (error instanceof Error && error.message.includes('invalid json')) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
       return new Response(JSON.stringify({ error: 'Failed to delete message' }), {
         status: 500,
         headers: { 'content-type': 'application/json' }

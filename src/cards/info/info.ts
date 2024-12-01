@@ -1,11 +1,9 @@
 import { BaseCardRouter } from '../cardRouter.ts';
-import type { CardMessage, CardAuthor } from '../../../db/client/types.ts';
+import type { CardMessage, CardAuthor, KvKey, BaseCard } from '../../../db/client/types.ts';
 import { kv } from '../../../db/core/kv.ts';
-import * as kvBroadcast from '../../ws/kvBroadcast.ts';
+import * as _kvBroadcast from '../../ws/kvBroadcast.ts';
 
-export interface InfoCardState {
-  id: string;
-  name: string;
+export interface InfoCardState extends BaseCard {
   messages: CardMessage[];
   created: number;
   lastUpdated: number;
@@ -22,7 +20,7 @@ export class InfoCardRouter extends BaseCardRouter {
     super('info', userId, author);
   }
 
-  async getCards(): Promise<InfoCardState[]> {
+  override async getCards(): Promise<InfoCardState[]> {
     try {
       const cards: InfoCardState[] = [];
       const iterator = kv.list<CardData>({ prefix: ['cards', 'info', 'data'] });
@@ -32,10 +30,17 @@ export class InfoCardRouter extends BaseCardRouter {
         if (typeof id === 'string') {
           cards.push({
             id,
+            type: this.cardType,
             name: id,
             messages: entry.value.messages || [],
             created: entry.value.timestamp,
-            lastUpdated: entry.value.lastUpdated
+            lastUpdated: entry.value.lastUpdated,
+            createdBy: this.author,
+            content: entry.value.messages?.[0]?.text || '',
+            metadata: {
+              messageCount: entry.value.messages?.length || 0,
+              lastMessageTime: entry.value.lastUpdated
+            }
           });
         }
       }
@@ -43,11 +48,11 @@ export class InfoCardRouter extends BaseCardRouter {
       return cards;
     } catch (error) {
       console.error('Error getting cards:', error);
-      throw new Error(`Failed to get cards: ${error.message}`);
+      throw new Error(`Failed to get cards: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  handleRequest(req: Request): Promise<Response> {
+  override handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
 
@@ -62,7 +67,13 @@ export class InfoCardRouter extends BaseCardRouter {
     }
 
     // Handle API endpoints
-    if (path === 'api') {
+    if (path.startsWith('api')) {
+      const subPath = path.replace('api/', '');
+      
+      if (subPath === 'messages' && req.method === 'GET') {
+        return this.handleMessagesList(req);
+      }
+
       switch (req.method) {
         case 'GET':
           return this.handleApiGet(req);
@@ -78,65 +89,127 @@ export class InfoCardRouter extends BaseCardRouter {
     return Promise.resolve(new Response('Not Found', { status: 404 }));
   }
 
-  private async handleList(): Promise<Response> {
+  override async createCard(name: string): Promise<InfoCardState> {
     try {
-      const cards = await this.getCards();
-      return new Response(JSON.stringify(cards), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const cardId = name;
+      const timestamp = Date.now();
+      const cardData: CardData = {
+        messages: [],
+        timestamp,
+        lastUpdated: timestamp
+      };
+
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      await kv.set(key, cardData);
+
+      return {
+        id: cardId,
+        type: this.cardType,
+        name: cardId,
+        messages: [],
+        created: timestamp,
+        lastUpdated: timestamp,
+        createdBy: this.author,
+        content: '',
+        metadata: {
+          messageCount: 0,
+          lastMessageTime: timestamp
+        }
+      };
     } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      console.error('Error creating card:', error);
+      throw new Error(`Failed to create card: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private async handleCreate(req: Request): Promise<Response> {
+  override async deleteCard(cardId: string): Promise<void> {
     try {
-      const data = await req.json();
-      if (!data.name) {
-        return new Response(JSON.stringify({ error: 'Name is required' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      await kv.delete(key);
+    } catch (error) {
+      console.error('Error deleting card:', error);
+      throw new Error(`Failed to delete card: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  override async getCard(cardId: string): Promise<InfoCardState> {
+    try {
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<CardData>(key);
+      if (!entry?.value) {
+        throw new Error('not found');
       }
 
-      const card = await this.createCard(data.name);
-      return new Response(JSON.stringify(card), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return {
+        id: cardId,
+        type: this.cardType,
+        name: cardId,
+        messages: entry.value.messages || [],
+        created: entry.value.timestamp,
+        lastUpdated: entry.value.lastUpdated,
+        createdBy: this.author,
+        content: entry.value.messages?.[0]?.text || '',
+        metadata: {
+          messageCount: entry.value.messages?.length || 0,
+          lastMessageTime: entry.value.lastUpdated
+        }
+      };
     } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      console.error('Error getting card:', error);
+      throw new Error(`Failed to get card: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private async handleDelete(req: Request): Promise<Response> {
+  override async addMessage(cardId: string, text: string): Promise<void> {
     try {
-      const data = await req.json();
-      if (!data.cardId) {
-        return new Response(JSON.stringify({ error: 'Card ID is required' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<CardData>(key);
+      if (!entry?.value) {
+        throw new Error('not found');
       }
 
-      await this.deleteCard(data.cardId);
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const message: CardMessage = {
+        id: crypto.randomUUID(),
+        text,
+        author: this.author,
+        timestamp: Date.now()
+      };
+
+      const updatedData: CardData = {
+        ...entry.value,
+        messages: [...entry.value.messages, message],
+        lastUpdated: message.timestamp
+      };
+
+      await kv.set(key, updatedData);
     } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      console.error('Error adding message:', error);
+      throw new Error(`Failed to add message: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
-  private async handleApiGet(req: Request): Promise<Response> {
+  override async deleteMessage(cardId: string, messageId: string): Promise<void> {
+    try {
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<CardData>(key);
+      if (!entry?.value) {
+        throw new Error('not found');
+      }
+
+      const updatedData: CardData = {
+        ...entry.value,
+        messages: entry.value.messages.filter(m => m.id !== messageId),
+        lastUpdated: Date.now()
+      };
+
+      await kv.set(key, updatedData);
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      throw new Error(`Failed to delete message: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async handleMessagesList(req: Request): Promise<Response> {
     try {
       const url = new URL(req.url);
       const cardId = url.searchParams.get('cardId');
@@ -147,72 +220,20 @@ export class InfoCardRouter extends BaseCardRouter {
         });
       }
 
-      const card = await this.getCard(cardId);
-      return new Response(JSON.stringify(card), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  private async handleMessageAdd(req: Request): Promise<Response> {
-    try {
-      const data = await req.json();
-      if (!data.cardId || !data.text) {
-        return new Response(JSON.stringify({ error: 'Card ID and text are required' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const message = await this.addMessage(data.cardId, data.text);
-      return new Response(JSON.stringify(message), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  private async handleMessageDelete(req: Request): Promise<Response> {
-    try {
-      const data = await req.json();
-      if (!data.cardId || !data.messageId) {
-        return new Response(JSON.stringify({ error: 'Card ID and message ID are required' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-
-      const key: KvKey = ['cards', this.cardType, 'data', data.cardId];
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
       const entry = await kv.get<CardData>(key);
       if (!entry?.value) {
-        return new Response(JSON.stringify({ error: 'Card not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        throw new Error('not found');
       }
 
-      const messages = entry.value.messages.filter(m => m.id !== data.messageId);
-      await kvBroadcast.broadcastSet(key, {
-        ...entry.value,
-        messages,
-        lastUpdated: Date.now()
-      });
-
-      return new Response(JSON.stringify({ success: true }), {
+      return new Response(JSON.stringify(entry.value.messages), {
         headers: { 'Content-Type': 'application/json' }
       });
     } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
+      const message = error instanceof Error ? error.message : String(error);
+      const status = message === 'not found' ? 404 : 500;
+      return new Response(JSON.stringify({ error: message }), {
+        status,
         headers: { 'Content-Type': 'application/json' }
       });
     }
@@ -253,6 +274,31 @@ export function getInfoCardScript(): string {
         if (!response.ok) {
           throw new Error(\`Failed to delete card: \${response.status}\`);
         }
+        return await response.json();
+      },
+
+      async addMessage(cardId, text) {
+        const response = await fetch('/cards/info/api', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cardId, text })
+        });
+        if (!response.ok) {
+          throw new Error(\`Failed to add message: \${response.status}\`);
+        }
+        return await response.json();
+      },
+
+      async deleteMessage(cardId, messageId) {
+        const response = await fetch('/cards/info/api', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cardId, messageId })
+        });
+        if (!response.ok) {
+          throw new Error(\`Failed to delete message: \${response.status}\`);
+        }
+        return await response.json();
       }
     };
   `;
