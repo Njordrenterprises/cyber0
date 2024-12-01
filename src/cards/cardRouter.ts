@@ -208,8 +208,19 @@ export abstract class BaseCardRouter implements CardOperations {
         return this.handleList();
       case 'create':
         return this.handleCreate(req);
-      case 'delete':
-        return this.handleDelete(req);
+    }
+
+    // Handle direct card operations
+    const cardId = path;
+    if (cardId && !cardId.includes('/')) {
+      switch (req.method) {
+        case 'GET':
+          return this.handleGet(cardId);
+        case 'PUT':
+          return this.handleUpdate(cardId, req);
+        case 'DELETE':
+          return this.handleCardDelete(cardId);
+      }
     }
 
     // Handle API endpoints
@@ -273,43 +284,65 @@ export abstract class BaseCardRouter implements CardOperations {
     }
   }
 
-  protected async handleDelete(req: Request): Promise<Response> {
+  protected async handleGet(cardId: string): Promise<Response> {
     try {
-      const data = await req.json();
-      if (!data.cardId) {
-        return new Response(JSON.stringify({ error: 'Card ID is required' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-
-      try {
-        await this.deleteCard(data.cardId);
-        return new Response(JSON.stringify({ success: true }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
-        });
-      } catch (error) {
-        if (error instanceof Error && error.message === 'not found') {
-          return new Response(JSON.stringify({ error: 'Card not found' }), {
-            status: 404,
-            headers: { 'content-type': 'application/json' }
-          });
-        }
-        throw error;
-      }
-    } catch (error) {
-      console.error('Error deleting card:', error);
-      if (error instanceof Error && error.message.includes('invalid json')) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-      return new Response(JSON.stringify({ error: 'Failed to delete card' }), {
-        status: 500,
+      const card = await this.getCard(cardId);
+      return new Response(JSON.stringify(card), {
+        status: 200,
         headers: { 'content-type': 'application/json' }
       });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'not found') {
+        return new Response('Not Found', { status: 404 });
+      }
+      console.error('Error getting card:', error);
+      return new Response('Internal Server Error', { status: 500 });
+    }
+  }
+
+  protected async handleUpdate(cardId: string, req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      const card = await this.getCard(cardId);
+      
+      // Update card data
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<KvCardData>(key);
+      if (!entry?.value) {
+        return new Response('Not Found', { status: 404 });
+      }
+
+      const updatedData = {
+        ...entry.value,
+        content: data.content,
+        lastUpdated: Date.now()
+      };
+
+      await kvBroadcast.broadcastSet(key, updatedData);
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error updating card:', error);
+      return new Response('Internal Server Error', { status: 500 });
+    }
+  }
+
+  protected async handleCardDelete(cardId: string): Promise<Response> {
+    try {
+      await this.deleteCard(cardId);
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'not found') {
+        return new Response('Not Found', { status: 404 });
+      }
+      console.error('Error deleting card:', error);
+      return new Response('Internal Server Error', { status: 500 });
     }
   }
 

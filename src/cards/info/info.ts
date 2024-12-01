@@ -62,8 +62,19 @@ export class InfoCardRouter extends BaseCardRouter {
         return this.handleList();
       case 'create':
         return this.handleCreate(req);
-      case 'delete':
-        return this.handleDelete(req);
+    }
+
+    // Handle direct card operations
+    const cardId = path;
+    if (cardId && !cardId.includes('/')) {
+      switch (req.method) {
+        case 'GET':
+          return this.handleGet(cardId);
+        case 'PUT':
+          return this.handleUpdate(cardId, req);
+        case 'DELETE':
+          return this.handleCardDelete(cardId);
+      }
     }
 
     // Handle API endpoints
@@ -87,6 +98,75 @@ export class InfoCardRouter extends BaseCardRouter {
     }
 
     return Promise.resolve(new Response('Not Found', { status: 404 }));
+  }
+
+  protected async handleGet(cardId: string): Promise<Response> {
+    try {
+      const card = await this.getCard(cardId);
+      return new Response(JSON.stringify(card), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'not found') {
+        return new Response('Not Found', { status: 404 });
+      }
+      console.error('Error getting card:', error);
+      return new Response('Internal Server Error', { status: 500 });
+    }
+  }
+
+  protected async handleUpdate(cardId: string, req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<CardData>(key);
+      if (!entry?.value) {
+        return new Response('Not Found', { status: 404 });
+      }
+
+      const updatedData: CardData = {
+        ...entry.value,
+        messages: entry.value.messages || [],
+        lastUpdated: Date.now()
+      };
+
+      if (data.content) {
+        const message: CardMessage = {
+          id: crypto.randomUUID(),
+          text: data.content,
+          author: this.author,
+          timestamp: Date.now()
+        };
+        updatedData.messages = [...updatedData.messages, message];
+      }
+
+      await kv.set(key, updatedData);
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error updating card:', error);
+      return new Response('Internal Server Error', { status: 500 });
+    }
+  }
+
+  protected async handleCardDelete(cardId: string): Promise<Response> {
+    try {
+      await this.deleteCard(cardId);
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'not found') {
+        return new Response('Not Found', { status: 404 });
+      }
+      console.error('Error deleting card:', error);
+      return new Response('Internal Server Error', { status: 500 });
+    }
   }
 
   override async createCard(name: string): Promise<InfoCardState> {
