@@ -102,17 +102,40 @@ export class InfoCardRouter extends BaseCardRouter {
 
   protected async handleGet(cardId: string): Promise<Response> {
     try {
-      const card = await this.getCard(cardId);
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<CardData>(key);
+      if (!entry?.value) {
+        return new Response(JSON.stringify({ error: 'Card not found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+
+      const card = {
+        id: cardId,
+        type: this.cardType,
+        name: cardId,
+        messages: entry.value.messages || [],
+        created: entry.value.timestamp,
+        lastUpdated: entry.value.lastUpdated,
+        createdBy: this.author,
+        content: entry.value.messages?.[0]?.text || '',
+        metadata: {
+          messageCount: entry.value.messages?.length || 0,
+          lastMessageTime: entry.value.lastUpdated
+        }
+      };
+
       return new Response(JSON.stringify(card), {
         status: 200,
         headers: { 'content-type': 'application/json' }
       });
     } catch (error) {
-      if (error instanceof Error && error.message === 'not found') {
-        return new Response('Not Found', { status: 404 });
-      }
       console.error('Error getting card:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
     }
   }
 
@@ -122,7 +145,10 @@ export class InfoCardRouter extends BaseCardRouter {
       const key: KvKey = ['cards', this.cardType, 'data', cardId];
       const entry = await kv.get<CardData>(key);
       if (!entry?.value) {
-        return new Response('Not Found', { status: 404 });
+        return new Response(JSON.stringify({ error: 'Card not found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' }
+        });
       }
 
       const updatedData: CardData = {
@@ -148,24 +174,72 @@ export class InfoCardRouter extends BaseCardRouter {
         headers: { 'content-type': 'application/json' }
       });
     } catch (error) {
+      if (error instanceof Error && error.message.includes('invalid json')) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
       console.error('Error updating card:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
     }
   }
 
   protected async handleCardDelete(cardId: string): Promise<Response> {
     try {
-      await this.deleteCard(cardId);
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<CardData>(key);
+      if (!entry?.value) {
+        return new Response(JSON.stringify({ error: 'Card not found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+
+      await kv.delete(key);
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { 'content-type': 'application/json' }
       });
     } catch (error) {
-      if (error instanceof Error && error.message === 'not found') {
-        return new Response('Not Found', { status: 404 });
-      }
       console.error('Error deleting card:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  }
+
+  protected async handleCreate(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      if (!data.name) {
+        return new Response(JSON.stringify({ error: 'Name is required' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+
+      const card = await this.createCard(data.name);
+      return new Response(JSON.stringify(card), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('invalid json')) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      console.error('Error creating card:', error);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
     }
   }
 
@@ -236,7 +310,7 @@ export class InfoCardRouter extends BaseCardRouter {
       };
     } catch (error) {
       console.error('Error getting card:', error);
-      throw new Error(`Failed to get card: ${error instanceof Error ? error.message : String(error)}`);
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 

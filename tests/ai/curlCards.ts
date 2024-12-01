@@ -71,8 +71,9 @@ Deno.test("Card Operations", async (t) => {
   // Test getting deleted card (should fail)
   await t.step("get deleted card", async () => {
     const response = await fetch(`${BASE_URL}/cards/info/${cardId}`);
-    assertEquals(response.status, 500);
-    await response.text();
+    assertEquals(response.status, 404);
+    const data = await response.json();
+    assertEquals(data.error, "Card not found");
   });
 
   // Test error cases
@@ -88,10 +89,23 @@ Deno.test("Card Operations", async (t) => {
     assertEquals(data.error, "Name is required");
   });
 
+  await t.step("create card with invalid JSON", async () => {
+    const response = await fetch(`${BASE_URL}/cards/info/create`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "invalid json"
+    });
+
+    assertEquals(response.status, 400);
+    const data = await response.json();
+    assertEquals(data.error, "Invalid JSON in request");
+  });
+
   await t.step("get non-existent card", async () => {
     const response = await fetch(`${BASE_URL}/cards/info/non-existent-id`);
-    assertEquals(response.status, 500);
-    await response.text();
+    assertEquals(response.status, 404);
+    const data = await response.json();
+    assertEquals(data.error, "Card not found");
   });
 
   await t.step("update non-existent card", async () => {
@@ -102,7 +116,20 @@ Deno.test("Card Operations", async (t) => {
     });
 
     assertEquals(response.status, 404);
-    await response.text();
+    const data = await response.json();
+    assertEquals(data.error, "Card not found");
+  });
+
+  await t.step("update card with invalid JSON", async () => {
+    const response = await fetch(`${BASE_URL}/cards/info/${cardId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: "invalid json"
+    });
+
+    assertEquals(response.status, 400);
+    const data = await response.json();
+    assertEquals(data.error, "Invalid JSON in request");
   });
 
   await t.step("delete non-existent card", async () => {
@@ -110,7 +137,8 @@ Deno.test("Card Operations", async (t) => {
       method: "DELETE"
     });
 
-    assertEquals(response.status, 200);
-    await response.text();
+    assertEquals(response.status, 404);
+    const data = await response.json();
+    assertEquals(data.error, "Card not found");
   });
 }); 
