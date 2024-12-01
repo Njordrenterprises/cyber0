@@ -1,38 +1,25 @@
-# Cyber0: AI-Human Card System
-
-A hypermedia-driven card system enabling seamless interaction between humans and AIs.
+# Cyber0 Development Rules
 
 ## Core Technology Stack
 - Runtime: Deno 2.0.6
-- Features: kv --unstable
+- Features: Deno KV
 - Core Libraries:
   - HTMX: 2.0.3
   - Alpine.js: 3.x
 
-## Architecture Overview
+## System Role
+You are an expert Deno developer specializing in hypermedia-driven applications using HTMX, Alpine.js, and Deno KV for secure state management.
 
-### Card System
-- Self-contained card components
-- Unified API for human and AI interaction
-- Plugin system for extensibility
-- Command system for programmatic control
-- Real-time event system
-- Resource management
-
-### Authentication
-- Session-based authentication
-- PKCE flow for security
-- KV-based session storage
-- Proper session cleanup
-
-### Data Storage
-- Deno KV for persistence
-- Real-time updates via WebSocket
-- IPFS integration (planned)
-- Proper type safety
+## Core Principles
+- Write concise, native Deno TypeScript code
+- Use hypermedia patterns over client-side JavaScript
+- Maintain locality of behavior in components
+- Leverage Deno KV for data persistence and session management
+- Implement security best practices by default
+- Use HTMX for dynamic updates
+- Use Alpine.js for lightweight interactivity
 
 ## Project Structure
-```
 /
 ├── db/                # Database layer
 │   ├── core/         # Core KV operations
@@ -41,7 +28,8 @@ A hypermedia-driven card system enabling seamless interaction between humans and
 ├── src/
 │   ├── cards/        # Card components
 │   │   ├── base/     # Base card functionality
-│   │   └── [type]/   # Card type implementations
+│   │   ├── info/     # Info card implementation
+│   │   └── message/  # Message card implementation
 │   ├── plugins/      # Plugin system
 │   ├── commands/     # Command handlers
 │   ├── events/       # Event system
@@ -52,142 +40,174 @@ A hypermedia-driven card system enabling seamless interaction between humans and
 ├── public/           # Static assets
 ├── deno.json        # Config file
 └── main.ts          # Entry point
-```
 
-## Core Features
-
-### Card System
-- Create and manage cards
-- Send and receive messages
-- Execute commands
-- Handle events
+## Card System Architecture
+Each card type must:
+- Have its own directory
+- Implement required interfaces
+- Support both human and AI interaction
+- Handle commands and events
+- Support plugins
 - Manage resources
-- Plugin support
 
-### Plugin System
-- Lifecycle hooks
-- Event handlers
-- State management
-- Resource management
-- Command handling
+### Card Directory Structure
+```
+src/cards/[type]/
+├── [type].ts     # Router + Client script
+├── [type].html   # Template
+└── [type].css    # Styles
+```
 
-### Command System
-- Execute commands
-- Handle arguments
-- Manage permissions
+### Card Requirements
+1. Router must:
+   - Extend BaseCardRouter
+   - Implement required interfaces
+   - Support both human and AI APIs
+   - Handle commands and events
+   - Support plugin system
+   - Handle nested cards
+
+2. Template must:
+   - Use semantic HTML
+   - Support HTMX updates
+   - Use Alpine.js for interactivity
+   - Support fullscreen mode
+   - Handle both human and AI content
+   - Support nested card views
+
+3. Styles must:
+   - Be scoped to card
+   - Support themes
+   - Use CSS variables
+   - Handle responsive design
+   - Support fullscreen mode
+   - Handle nested card layouts
+
+## Nested Card System
+All cards must:
+- Support being nested within info cards
+- Maintain parent-child relationships
+- Support reordering within parent
+- Handle relationship types
+- Track nested card metadata
+- Support moving between parents
+
+### Nested Card Operations
+1. Attach:
+   - Validate parent and child exist
+   - Check permissions
+   - Set relationship type
+   - Update both cards atomically
+
+2. Detach:
+   - Validate relationship exists
+   - Check permissions
+   - Remove relationship
+   - Update both cards atomically
+
+3. Move:
+   - Validate source and target parents
+   - Check permissions
+   - Maintain relationship type
+   - Update all cards atomically
+
+4. Reorder:
+   - Validate parent and child
+   - Check permissions
+   - Update positions atomically
+   - Maintain relationships
+
+## Plugin System
+Plugins must:
+- Implement CardPlugin interface
+- Handle lifecycle events
+- Support state management
+- Manage resources
+- Handle commands
+
+## Command System
+Commands must:
+- Be type-safe
+- Support validation
+- Handle permissions
 - Support metadata
-- AI-specific commands
+- Work for both humans and AIs
 
-### Event System
-- Real-time updates
-- Event filtering
-- Event history
-- Event validation
-- Actor tracking
+## Event System
+Events must:
+- Be type-safe
+- Support filtering
+- Maintain history
+- Validate data
+- Track actors
 
-### User System
-- Human and AI users
-- Capability management
-- Preference handling
-- Session management
-- Activity tracking
+## Development Rules
+- Use native Deno APIs over third-party modules
+- If native Deno won't work, use hono from jsr
+- Co-locate related code in components
+- Use KV for persistence
+- Implement proper security
+- Write self-documenting code
+- Keep components focused
+- Ensure type safety
+- Include error handling
+- Write performant code
 
-## API Structure
+## IDE Settings
+- Quotes: single
+- Indent: 2
+- Max Line Length: 80
+- TypeScript:
+  - strict: true
+  - noImplicitAny: true
 
-### Card API
-```typescript
-interface CardAPI {
-  // Core operations
-  create(definition: CardDefinition): Promise<BaseCard>;
-  delete(cardId: string): Promise<boolean>;
-  update(cardId: string, content: unknown): Promise<BaseCard>;
-  
-  // Message handling
-  sendMessage(cardId: string, message: Partial<CardMessage>): Promise<CardMessage>;
-  getMessages(cardId: string, options?: { limit?: number; before?: number }): Promise<CardMessage[]>;
-  
-  // Command handling
-  executeCommand(command: CardCommand): Promise<CardResponse>;
-  
-  // Event handling
-  subscribe(cardId: string, handler: (event: CardEvent) => void): () => void;
-  unsubscribe(cardId: string): void;
-  
-  // Metadata
-  getDefinition(cardType: string): Promise<CardDefinition>;
-  getCapabilities(cardId: string): Promise<CardDefinition['capabilities']>;
+## Naming Conventions
+- Components: PascalCase
+- Pages: camelCase
+- API: kebab-case
+- Styles: kebab-case
+
+## File Extensions
+- TypeScript: .ts
+- Styles: .css
+- Templates: .html
+
+## Development Commands
+```json
+{
+  "tasks": {
+    "dev": "deno run --allow-net --allow-read server.ts",
+    "start": "deno run --allow-net --allow-read server.ts",
+    "test": "deno test --allow-net --allow-read",
+    "test:cards": "deno test --allow-net tests/ai/curlCards.ts",
+    "test:messages": "deno test --allow-net tests/ai/message_test.ts",
+    "test:nested": "deno test --allow-net tests/ai/nested_cards_test.ts",
+    "test:all": "deno test --allow-net tests/ai/",
+    "kill": "./scripts/kill_deno.sh"
+  }
 }
 ```
 
-### Plugin API
-```typescript
-interface PluginAPI extends CardAPI {
-  // Plugin operations
-  register(plugin: CardPlugin): Promise<void>;
-  unregister(pluginName: string): Promise<void>;
-  
-  // State management
-  getState(): Promise<unknown>;
-  setState(state: unknown): Promise<void>;
-  
-  // Resource management
-  getResource(path: string): Promise<unknown>;
-  setResource(path: string, data: unknown): Promise<void>;
-}
-```
+## Prohibited Practices
+- Build steps or bundlers
+- Client-side routing
+- Complex state management
+- External dependencies when Deno stdlib suffices
+- Framework abstractions
+- jQuery or similar libraries
+- Custom session implementations
+- Manual OAuth flows
+- Client-side OAuth state management
+- Session storage outside of KV
+- Modifying main.ts for card routing
+- Direct KV access (use db/client APIs)
+- Manual template loading
+- Inline styles
+- Direct WebSocket handling
 
-## Development
-
-### Setup
-```bash
-# Install Deno
-curl -fsSL https://deno.land/x/install/install.sh | sh
-
-# Clone repository
-git clone https://github.com/yourusername/cyber0.git
-cd cyber0
-
-# Run development server
-deno task dev
-```
-
-### Testing
-```bash
-# Run all tests
-deno test
-
-# Run specific test suite
-deno test tests/ai/card_test.ts
-```
-
-### Creating a New Card Type
-1. Create directory: `src/cards/[type]/`
-2. Implement required files:
-   - `[type].ts`: Router implementation
-   - `[type].html`: Card template
-   - `[type].css`: Card styles
-3. Register in `src/cards/cardManager.ts`
-
-### Creating a Plugin
-1. Implement the `CardPlugin` interface
-2. Register using the Plugin API
-3. Handle lifecycle events
-4. Implement command handlers
-
-## Security
-- Session-based authentication
-- PKCE flow for OAuth
-- Proper CORS settings
-- Rate limiting
-- Input validation
-- Type safety
-
-## Contributing
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-MIT
+## Documentation Requirements
+- Clear component documentation
+- Type definitions
+- Security considerations
+- Usage examples
+- API documentation
