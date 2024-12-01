@@ -88,7 +88,7 @@ export class BaseCardRouter implements CardOperations {
    * @returns The updated card
    * @throws Error if card not found or permission denied
    */
-  protected async updateCard(cardId: string, data: { content?: unknown }): Promise<BaseCard> {
+  protected async updateCard(cardId: string, data: { content?: Record<string, unknown> }): Promise<BaseCard> {
     const key = this.getCardKey(cardId);
     const entry = await kv.get<BaseCard>(key);
 
@@ -100,12 +100,12 @@ export class BaseCardRouter implements CardOperations {
       throw new Error('Permission denied');
     }
 
-    const updatedCard = {
+    const updatedCard: BaseCard = {
       ...entry.value,
-      content: {
-        ...entry.value.content,
+      content: data.content ? {
+        ...entry.value.content as Record<string, unknown>,
         ...data.content
-      },
+      } : entry.value.content,
       lastUpdated: Date.now()
     };
 
@@ -498,7 +498,7 @@ export class BaseCardRouter implements CardOperations {
   protected async handleCoreOperation(req: Request, path: string): Promise<Response> {
     try {
       switch (req.method) {
-        case 'GET':
+        case 'GET': {
           if (path === '') {
             return new Response(JSON.stringify(await this.getCards()), {
               status: 200,
@@ -509,16 +509,18 @@ export class BaseCardRouter implements CardOperations {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
+        }
 
-        case 'POST':
+        case 'POST': {
           const data = await req.json();
           const card = await this.createCardWithContent(data);
           return new Response(JSON.stringify(card), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
+        }
 
-        case 'PUT':
+        case 'PUT': {
           const updateData = await req.json();
           const cardId = path;
           const updatedCard = await this.updateCard(cardId, updateData);
@@ -526,19 +528,22 @@ export class BaseCardRouter implements CardOperations {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
+        }
 
-        case 'DELETE':
+        case 'DELETE': {
           await this.deleteCard(path);
           return new Response(JSON.stringify({ success: true }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
+        }
 
-        default:
+        default: {
           return new Response(JSON.stringify({ error: 'Method not allowed' }), {
             status: 405,
             headers: { 'Content-Type': 'application/json' }
           });
+        }
       }
     } catch (error) {
       console.error('Error handling core operation:', error);
@@ -560,22 +565,28 @@ export class BaseCardRouter implements CardOperations {
       const operation = path.split('/').pop();
 
       switch (operation) {
-        case 'attach':
+        case 'attach': {
           return await this.handleAttachCard(req);
-        case 'detach':
+        }
+        case 'detach': {
           return await this.handleDetachCard(req);
-        case 'move':
+        }
+        case 'move': {
           return await this.handleMoveCard(req);
-        case 'reorder':
+        }
+        case 'reorder': {
           return await this.handleReorderCard(req);
-        case 'nested':
+        }
+        case 'nested': {
           const cardId = path.split('/')[path.split('/').length - 2];
-          return await this.handleGetNestedCards(cardId, req);
-        default:
+          return await this.handleGetNestedCards(cardId);
+        }
+        default: {
           return new Response(JSON.stringify({ error: 'Invalid operation' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
           });
+        }
       }
     } catch (error) {
       console.error('Error handling nested operation:', error);
@@ -760,7 +771,7 @@ export class BaseCardRouter implements CardOperations {
    * @param req The incoming HTTP request
    * @returns HTTP response
    */
-  protected async handleGetNestedCards(cardId: string, req: Request): Promise<Response> {
+  protected async handleGetNestedCards(cardId: string): Promise<Response> {
     try {
       const card = await this.getCard(cardId);
       const nestedCards = card.metadata.nestedCards || [];

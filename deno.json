@@ -17,5 +17,11 @@
   "compilerOptions": {
     "strict": true,
     "noImplicitAny": true
+  },
+  "lint": {
+    "exclude": [
+      "static/js/alpine.min.js",
+      "static/js/htmx.min.js"
+    ]
   }
 }
