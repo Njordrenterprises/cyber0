@@ -1,0 +1,353 @@
+[x-cloak] {
+  display: none !important;
+}
+
+/* Global username styles */
+.username,
+.card-creator,
+.message-author {
+  font-weight: 600;
+  text-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  opacity: 0.9;
+  display: flex;
+  align-items: center;
+}
+
+/* Base username styles */
+.username {
+  font-size: 0.9rem;
+  text-transform: capitalize;
+}
+
+.card-creator {
+  font-size: 0.875rem;
+  margin-top: var(--spacing-xs);
+}
+
+.message-author {
+  font-size: 0.95rem;
+  margin-right: var(--spacing-sm);
+}
+
+/* Dynamic color styles */
+.username[style*="--user-color"],
+.card-creator[style*="--user-color"],
+.message-author[style*="--user-color"] {
+  color: var(--user-color);
+}
+
+/* Base card styles */
+.card {
+  width: 100%;
+  height: 100%;
+  background: var(--card-bg, #ffffff);
+  border-radius: clamp(8px, 2vw, var(--card-radius, 12px));
+  box-shadow: var(--card-shadow, 0 2px 8px rgba(0, 0, 0, 0.1));
+  padding: clamp(var(--spacing-sm), 2vw, var(--spacing-lg));
+  margin: 0;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* Fullscreen styles */
+.card.fullscreen,
+.card[data-selected="true"] {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  z-index: 9999 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  transition: all 0.3s ease;
+  animation: cardExpand 0.3s ease-out;
+  border: none;
+}
+
+/* Fullscreen header adjustments */
+.card.fullscreen .card-header,
+.card[data-selected="true"] .card-header {
+  padding: var(--spacing-lg);
+  background: var(--glass-bg);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: calc(var(--spacing-lg) * -1);
+  margin-bottom: var(--spacing-lg);
+  backdrop-filter: blur(10px);
+}
+
+/* Fullscreen input adjustments */
+.card.fullscreen .input-container,
+.card[data-selected="true"] .input-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: var(--spacing-lg);
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+  border-radius: 0;
+  border-top: 1px solid var(--glass-border);
+}
+
+.card.fullscreen .input-container form,
+.card[data-selected="true"] .input-container form {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+@keyframes cardExpand {
+  from {
+    transform: scale(0.95);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.card:hover {
+  box-shadow: var(--card-shadow-hover, 0 4px 12px rgba(0, 0, 0, 0.15));
+  transform: translateY(-2px);
+}
+
+.card h1, .card h2, .card h3 {
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  margin-bottom: clamp(var(--spacing-xs), 2vh, var(--spacing-md));
+}
+
+.card-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--spacing-xs), 2vh, var(--spacing-md));
+  padding-right: var(--spacing-sm);
+}
+
+/* Card Actions */
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 10;
+}
+
+.card-actions button {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1.2rem;
+}
+
+.card-actions .fullscreen-btn {
+  color: var(--text-primary);
+}
+
+.card-actions .fullscreen-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
+  transform: scale(1.1);
+}
+
+.card-actions .delete-btn:hover {
+  color: #ff4757;
+  border-color: #ff4757;
+  box-shadow: 0 0 15px rgba(255, 71, 87, 0.3);
+  transform: scale(1.1);
+}
+
+/* Messages section */
+.message-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding-right: var(--spacing-sm);
+  min-height: 0;
+  max-height: calc(100% - 140px);
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) var(--glass-bg);
+}
+
+/* Adjust messages for fullscreen mode */
+.card.fullscreen .message-container,
+.card[data-selected="true"] .message-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  padding-bottom: calc(var(--spacing-xl) * 4);
+  height: calc(100vh - 180px);
+  max-height: none;
+}
+
+/* Scrollbar Styles */
+.card-content::-webkit-scrollbar {
+  width: min(4px, 1vw);
+}
+
+.card-content::-webkit-scrollbar-track {
+  background: var(--bg-alt);
+  border-radius: 2px;
+}
+
+.card-content::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 2px;
+}
+
+.message-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.message-container::-webkit-scrollbar-track {
+  background: var(--glass-bg);
+  border-radius: 3px;
+}
+
+.message-container::-webkit-scrollbar-thumb {
+  background-color: var(--primary);
+  border-radius: 3px;
+  border: 2px solid var(--glass-bg);
+}
+
+/* Message styles */
+.message {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  padding: var(--spacing-md);
+  border-radius: var(--card-radius);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  max-width: 80%;
+  animation: messageAppear 0.3s ease-out;
+}
+
+.message:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 15px var(--primary-glow);
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.message-time {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.message-text {
+  margin: var(--spacing-xs) 0;
+  line-height: 1.5;
+  word-break: break-word;
+  font-size: 0.95rem;
+}
+
+.message-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  border-top: 1px solid var(--glass-border);
+}
+
+/* Transitions */
+.card-messages {
+  transition: all 0.3s ease-in-out;
+}
+
+.card-messages.entering {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.card-messages.entered {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.card-messages.exiting {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+@media (hover: none) {
+  .card:hover {
+    transform: none;
+    box-shadow: var(--card-shadow, 0 2px 8px rgba(0, 0, 0, 0.1));
+  }
+}
+
+@media (min-width: 1440px) {
+  .card {
+    font-size: clamp(16px, 1vw, 18px);
+  }
+}
+
+@media (max-width: 479px) {
+  .card {
+    font-size: clamp(14px, 4vw, 16px);
+  }
+
+  .card-content {
+    gap: var(--spacing-sm);
+  }
+
+  .card input[type="text"],
+  .card input[type="number"],
+  .card textarea {
+    font-size: 16px;
+  }
+}
+
+.author-sprite {
+  font-size: 1.2em;
+  margin-right: 0.5rem;
+  display: inline-block;
+  transform-origin: center;
+  transition: transform 0.3s ease;
+}
+
+.card-author:hover .author-sprite,
+.message-author:hover .author-sprite {
+  transform: scale(1.2);
+}

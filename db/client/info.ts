@@ -1,4 +1,4 @@
-import type { InfoCardMethods, BaseCard } from './types.ts';
+import type { BaseCard, InfoCardMethods } from './types.ts';
 
 export function getInfoCardMethods(): InfoCardMethods {
   return {
@@ -16,7 +16,7 @@ export function getInfoCardMethods(): InfoCardMethods {
         });
       }
     },
-    userId: globalThis.userContext?.id || 'test-user',
+    userId: (globalThis as unknown as Window).userContext?.id || 'test-user',
     handleKvUpdate: async (cardId: string, newMessage: string) => {
       try {
         const response = await fetch('/cards/info/message/add', {
@@ -115,43 +115,6 @@ export function getInfoCardScript(): string {
         });
         if (!response.ok) {
           throw new Error(\`Failed to delete card: \${response.status}\`);
-        }
-      },
-      
-      async loadCardMessages(cardId) {
-        try {
-          const response = await fetch(\`/kv/get?key=cards,info,data,\${cardId}\`);
-          if (!response.ok) {
-            throw new Error(\`Failed to load messages: \${response.status}\`);
-          }
-          const data = await response.json();
-          return data?.messages || [];
-        } catch (error) {
-          console.error('Error loading messages:', error);
-          return [];
-        }
-      },
-      
-      async handleKvUpdate(cardId, text) {
-        const response = await fetch('/cards/info/message/add', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cardId, text })
-        });
-        if (!response.ok) {
-          throw new Error(\`Failed to add message: \${response.status}\`);
-        }
-        return response.json();
-      },
-      
-      async handleKvDelete(cardId, messageId) {
-        const response = await fetch('/cards/info/message/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cardId, messageId })
-        });
-        if (!response.ok) {
-          throw new Error(\`Failed to delete message: \${response.status}\`);
         }
       }
     };

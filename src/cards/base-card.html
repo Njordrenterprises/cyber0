@@ -1,0 +1,24 @@
+<div class="card"
+     x-data="{ 
+       isFullscreen: false,
+       toggleFullscreen() {
+         this.isFullscreen = !this.isFullscreen;
+         document.body.style.overflow = this.isFullscreen ? 'hidden' : '';
+       }
+     }"
+     :class="{ 'fullscreen': isFullscreen }"
+     :data-selected="isFullscreen.toString()">
+  <div class="card-actions">
+    <button @click.stop="toggleFullscreen()" 
+            class="fullscreen-btn" 
+            title="Toggle fullscreen">
+      ⤢
+    </button>
+    <button @click.stop="$dispatch('delete-card')" 
+            class="delete-btn" 
+            title="Delete card">
+      ×
+    </button>
+  </div>
+  <slot></slot>
+</div> 

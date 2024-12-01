@@ -1,107 +1,220 @@
-import { Card, CardState, CardKvEntry, deleteCard } from '../cards.ts';
+import { BaseCardRouter } from '../cardRouter.ts';
 import type { CardMessage } from '../../../db/client/types.ts';
+import { kv } from '../../../db/core/kv.ts';
+import * as kvBroadcast from '../../ws/kvBroadcast.ts';
 
-export interface InfoState extends CardState {
+export interface InfoCardState {
+  id: string;
+  name: string;
   messages: CardMessage[];
-  cardId: string;
+  created: number;
+  lastUpdated: number;
 }
 
-export interface InfoKvEntry extends CardKvEntry {
+export interface CardData {
   messages: CardMessage[];
-  cardId: string;
+  timestamp: number;
+  lastUpdated: number;
 }
 
-class InfoCard extends Card<InfoState, InfoKvEntry> {
-  messages: CardMessage[] = [];
-  cardId: string = '';
+export class InfoCardRouter extends BaseCardRouter {
+  constructor(userId: string) {
+    super('info', userId);
+  }
 
-  protected override async loadInitialState(): Promise<void> {
-    const entry = await this.getKvEntry();
-    if (entry) {
-      this.messages = entry.messages;
-      this.cardId = entry.cardId;
+  async getCards(): Promise<InfoCardState[]> {
+    try {
+      const cards: InfoCardState[] = [];
+      const iterator = kv.list<CardData>({ prefix: ['cards', 'info', 'data'] });
+      
+      for await (const entry of iterator) {
+        const [, , , id] = entry.key;
+        if (typeof id === 'string') {
+          cards.push({
+            id,
+            name: id,
+            messages: entry.value.messages || [],
+            created: entry.value.timestamp,
+            lastUpdated: entry.value.lastUpdated
+          });
+        }
+      }
+      
+      return cards;
+    } catch (error) {
+      console.error('Error getting cards:', error);
+      throw new Error(`Failed to get cards: ${error.message}`);
     }
   }
 
-  async updateMessages(messages: CardMessage[]) {
-    const entry: InfoKvEntry = {
-      messages,
-      cardId: this.cardId,
-      timestamp: Date.now()
-    };
-    await this.setKvEntry(entry);
-    this.messages = messages;
-  }
+  handleRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
 
-  override getState(): InfoState {
-    return {
-      ...super.getState(),
-      messages: this.messages,
-      cardId: this.cardId
-    };
-  }
-
-  protected override getKvKey(): ['cards', string, string] {
-    return ['cards', this.id, this.userId];
-  }
-
-  // Alpine.js methods
-  async handleKvUpdate(cardId: string, newMessage: string) {
-    console.log('Handling KV update:', cardId, newMessage);
-    const _key = ['cards', 'info', this.userId, cardId];
-    let entry = await this.getCardEntry<InfoKvEntry>(cardId);
-    if (!entry) {
-      entry = { messages: [], cardId, timestamp: Date.now() };
+    // Handle base routes
+    switch (path) {
+      case 'list':
+        return this.handleList();
+      case 'create':
+        return this.handleCreate(req);
+      case 'delete':
+        return this.handleDelete(req);
     }
+
+    // Handle API endpoints
+    if (path === 'api') {
+      switch (req.method) {
+        case 'GET':
+          return this.handleApiGet(req);
+        case 'POST':
+          return this.handleMessageAdd(req);
+        case 'DELETE':
+          return this.handleMessageDelete(req);
+        default:
+          return Promise.resolve(new Response('Method not allowed', { status: 405 }));
+      }
+    }
+
+    return Promise.resolve(new Response('Not Found', { status: 404 }));
+  }
+
+  private async handleList(): Promise<Response> {
+    const cards = await this.getCards();
+    return new Response(JSON.stringify(cards), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  private async handleCreate(req: Request): Promise<Response> {
+    const { name } = await req.json();
+    const cardId = crypto.randomUUID();
+    const key = ['cards', 'info', 'data', cardId];
+    const now = Date.now();
+
+    const card: CardData = {
+      messages: [],
+      timestamp: now,
+      lastUpdated: now
+    };
+
+    await kvBroadcast.broadcastSet(key, card);
     
+    return new Response(JSON.stringify({ 
+      id: cardId,
+      name,
+      messages: [],
+      created: now,
+      lastUpdated: now
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  private async handleDelete(req: Request): Promise<Response> {
+    const { cardId } = await req.json();
+    const key = ['cards', 'info', 'data', cardId];
+    await kvBroadcast.broadcastDelete(key);
+    
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  private async handleApiGet(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const cardId = url.searchParams.get('cardId');
+    
+    if (cardId) {
+      const key = ['cards', 'info', 'data', cardId];
+      const entry = await kv.get<CardData>(key);
+      return new Response(JSON.stringify(entry || { messages: [] }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return this.handleList();
+  }
+
+  private async handleMessageAdd(req: Request): Promise<Response> {
+    const { cardId, text } = await req.json();
     const message: CardMessage = {
       id: crypto.randomUUID(),
-      text: newMessage,
+      text,
       timestamp: Date.now()
     };
 
-    entry.messages.push(message);
-    await this.setCardEntry(cardId, entry);
+    const key = ['cards', 'info', 'data', cardId];
+    const entry = await kv.get<CardData>(key);
+    const messages = entry?.messages || [];
+    messages.push(message);
+
+    await kvBroadcast.broadcastSet(key, { 
+      messages, 
+      timestamp: Date.now(),
+      lastUpdated: Date.now()
+    });
+
+    return new Response(JSON.stringify(message), {
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
-  async handleKvDelete(cardId: string, messageId: string) {
-    console.log('Handling KV delete:', cardId, messageId);
-    const entry = await this.getCardEntry<InfoKvEntry>(cardId);
-    if (!entry) return;
+  private async handleMessageDelete(req: Request): Promise<Response> {
+    const { cardId, messageId } = await req.json();
+    const key = ['cards', 'info', 'data', cardId];
+    const entry = await kv.get<CardData>(key);
+    if (!entry) {
+      return new Response('Card not found', { status: 404 });
+    }
 
     const messages = entry.messages.filter((m: CardMessage) => m.id !== messageId);
-    const updatedEntry = {
-      ...entry,
-      messages,
-      timestamp: Date.now()
-    };
+    await kvBroadcast.broadcastSet(key, { 
+      messages, 
+      timestamp: Date.now(),
+      lastUpdated: Date.now()
+    });
     
-    await this.setCardEntry(cardId, updatedEntry);
-    return updatedEntry;
-  }
-
-  async loadCardMessages(cardId: string): Promise<CardMessage[]> {
-    console.log('Loading messages for card:', cardId);
-    const entry = await this.getCardEntry<InfoKvEntry>(cardId);
-    console.log('Loaded entry:', entry);
-    if (!entry?.messages) return [];
-    // Sort messages by timestamp, newest first
-    return entry.messages.sort((a, b) => b.timestamp - a.timestamp);
-  }
-
-  // Method to expose Alpine.js methods
-  getAlpineMethods() {
-    return {
-      handleKvUpdate: this.handleKvUpdate.bind(this),
-      handleKvDelete: this.handleKvDelete.bind(this),
-      loadCardMessages: this.loadCardMessages.bind(this),
-      deleteCard: async (cardId: string) => {
-        console.log('Deleting card:', cardId);
-        await deleteCard(this.userId, cardId, this.id);
-      }
-    };
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
-const infoCard = new InfoCard('info');
-export default infoCard; 
+export function getInfoCardScript(): string {
+  return `
+    // Initialize cardData
+    globalThis.cardData = globalThis.cardData || {};
+    globalThis.cardData.info = globalThis.cardData.info || {
+      async getCards() {
+        const response = await fetch('/cards/info/list');
+        if (!response.ok) {
+          throw new Error(\`Failed to get cards: \${response.status}\`);
+        }
+        return await response.json();
+      },
+      
+      async createCard(name) {
+        const response = await fetch('/cards/info/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        if (!response.ok) {
+          throw new Error(\`Failed to create card: \${response.status}\`);
+        }
+        return await response.json();
+      },
+      
+      async deleteCard(cardId) {
+        const response = await fetch('/cards/info/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cardId })
+        });
+        if (!response.ok) {
+          throw new Error(\`Failed to delete card: \${response.status}\`);
+        }
+      }
+    };
+  `;
+} 

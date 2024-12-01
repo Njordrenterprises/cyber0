@@ -1,0 +1,30 @@
+<template id="test-card">
+  <div class="card test-card"
+       x-data="{ 
+         messages: [],
+         inputValue: '',
+         cardId: null,
+         cardData: null,
+         async init() {
+           // Wait for cardData to be available
+           while (!window.cardData?.test) {
+             await new Promise(resolve => setTimeout(resolve, 100));
+           }
+           this.cardData = window.cardData.test;
+           
+           const wrapper = $el.closest('.card-wrapper');
+           if (wrapper) {
+             this.cardId = wrapper.dataset.index;
+           }
+         }
+       }"
+       x-init="init"
+       x-extends="base-card">
+    <div class="card-header">
+      <h3 x-text="card.name"></h3>
+    </div>
+    <div class="card-content">
+      <p>Test Card Content</p>
+    </div>
+  </div>
+</template>

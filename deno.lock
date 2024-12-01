@@ -1,14 +1,12 @@
 {
   "version": "4",
   "specifiers": {
-    "npm:hono@*": "4.6.12",
-    "npm:hono@4.6.12": "4.6.12",
-    "npm:hono@^4.6.12": "4.6.12",
-    "npm:lucide@0.462": "0.462.0"
+    "npm:lucide-static@*": "0.462.0",
+    "npm:lucide@*": "0.462.0"
   },
   "npm": {
-    "hono@4.6.12": {
-      "integrity": "sha512-eHtf4kSDNw6VVrdbd5IQi16r22m3s7mWPLd7xOMhg1a/Yyb1A0qpUFq8xYMX4FMuDe1nTKeMX5rTx7Nmw+a+Ag=="
+    "lucide-static@0.462.0": {
+      "integrity": "sha512-tAVmvvxha2IMSwB4Bu4obGYgupLlXRNooDWelyINkkkX6Be7orvarPUPOBenjHeyiW7Xk8/yYDbpo8o7FElWCQ=="
     },
     "lucide@0.462.0": {
       "integrity": "sha512-mu9dpNXnonG2e2jO3jS8PCXwT0yNo8qyEOtEfcTIfbyRYgDa6Br81lP0eJRCcXUEvaGekw2h1diAvgL+l1M+GA=="
@@ -91,11 +89,5 @@
     "https://deno.land/std@0.220.1/path/windows/resolve.ts": "8dae1dadfed9d46ff46cc337c9525c0c7d959fb400a6308f34595c45bdca1972",
     "https://deno.land/std@0.220.1/streams/byte_slice_stream.ts": "5bbdcadb118390affa9b3d0a0f73ef8e83754f59bb89df349add669dd9369713",
     "https://deno.land/std@0.220.1/version.ts": "9fed16364d7058c5c0dfa8f570175e6433a56b62d1b4931cf7aec08fc8a9b666"
-  },
-  "workspace": {
-    "dependencies": [
-      "npm:hono@^4.6.12",
-      "npm:lucide@0.462"
-    ]
   }
 }

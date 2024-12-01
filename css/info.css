@@ -1,0 +1,39 @@
+.info-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.info-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: var(--spacing-sm);
+}
+
+.info-message {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.info-message-text {
+  flex: 1;
+  margin-right: var(--spacing-sm);
+  word-break: break-word;
+}
+
+.info-message-time {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.info-input {
+  margin-top: var(--spacing-md);
+  display: flex;
+  gap: var(--spacing-sm);
+}

@@ -1,5 +1,5 @@
 import { getClientScript } from '../../../db/client/index.ts';
-import { getUserWidgetScript } from '../../../widgets/user/user.ts';
+import { getUserWidgetScript } from '../../widgets/user/user.ts';
 
 interface User {
   id: string;
@@ -12,7 +12,7 @@ interface User {
 
 export async function layout(user: User): Promise<string> {
   const template = await Deno.readTextFile(new URL('./home.html', import.meta.url));
-  const userWidget = await Deno.readTextFile(new URL('../../../widgets/user/user.html', import.meta.url));
+  const userWidget = await Deno.readTextFile(new URL('../../widgets/user/user.html', import.meta.url));
   
   // Log the full user object to verify data
   console.log('Layout received user:', user);
@@ -25,6 +25,7 @@ export async function layout(user: User): Promise<string> {
   return `
     <link rel="stylesheet" href="/src/modals/modal.css">
     <link rel="stylesheet" href="/src/cards/info/info.css">
+    <link rel="stylesheet" href="/src/cards/test/test.css">
     <link rel="stylesheet" href="/src/cards/cards.css">
     <script>
       // Initialize cardData and user context

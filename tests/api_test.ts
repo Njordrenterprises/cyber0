@@ -1,4 +1,4 @@
-import { assertEquals, assertExists, assert } from "https://deno.land/std@0.220.1/assert/mod.ts";
+import { assertEquals, assertExists } from "jsr:@std/assert";
 
 const BASE_URL = "http://localhost:8000";
 

@@ -1,182 +1,333 @@
 # Project Understanding Guide for Cursor IDE
 
-## Project Overview
+## Core Technology Stack
+- Runtime: Deno 2.0.6
+- Features: kv --unstable
+- Core Libraries:
+  - HTMX: 2.0.3
+  - Alpine.js: 3.x
 
-This is a Deno-based hypermedia web application using Hono, HTMX, and Deno KV. The architecture follows a server-first approach with minimal client-side JavaScript, leveraging WebSockets for real-time updates and Alpine.js for lightweight client state management.
+## System Role
+You are an expert Deno developer specializing in hypermedia-driven applications using HTMX, Alpine.js, and Deno KV OAuth for secure state management.
 
-## Core Architecture
+## Core Principles
+- Write concise, native Deno TypeScript code
+- Use hypermedia patterns over client-side JavaScript
+- Maintain locality of behavior in components
+- Leverage Deno KV for data persistence and session management
+- Implement KV OAuth security best practices by default
+- Use HTMX for dynamic updates
+- Use Alpine.js for lightweight interactivity
 
-### Card-Based System
-
-Every card in the system follows this exact structure:
-
-1. Server-Side Card Class (src/cards/[card-name]/[card-name].ts)
-2. Client-Side Methods (db/client/[card-name].ts)
-3. HTML Template (src/cards/[card-name]/[card-name].html)
-4. CSS Styles (src/cards/[card-name]/[card-name].css)
-
-### Real-Time Updates
-
-- WebSocket server in main.ts
-- Centralized broadcast system in src/ws/broadcast.ts
-- Client-side WebSocket handling in home.html
-- Event-based message passing for real-time UI updates
-
-### Data Flow
-
-1. Client makes request (HTTP or WebSocket)
-2. Server processes in main.ts
-3. Operation handled by card-specific code
-4. KV store updated
-5. WebSocket broadcast sent
-6. All clients receive update
-7. UI automatically refreshes
-
-## Card Operations
-
-### Creating a Card
-
-```bash
-# Create a new card
-curl -X POST -H "Content-Type: application/json" \\
-     -d '{"name":"Card Name"}' \\
-     http://0.0.0.0:8000/cards/info/create
-```
-
-### Reading Card Data
-
-```bash
-# Get card messages
-curl "http://0.0.0.0:8000/kv/get?key=cards,info,test-user,CARD_ID"
-```
-
-### Adding Messages
-
-```bash
-# Send a message to a card
-curl -X POST -H "Content-Type: application/json" \\
-     -d '{"cardId":"CARD_ID", "text":"Message Text"}' \\
-     http://0.0.0.0:8000/cards/info/message/add
-```
-
-### Deleting Messages
-
-```bash
-# Delete a specific message
-curl -X POST -H "Content-Type: application/json" \\
-     -d '{"cardId":"CARD_ID", "messageId":"MESSAGE_ID"}' \\
-     http://0.0.0.0:8000/cards/info/message/delete
-```
-
-### Deleting Cards
-
-```bash
-# Delete an entire card
-curl -X POST -H "Content-Type: application/json" \\
-     -d '{"cardId":"CARD_ID"}' \\
-     http://0.0.0.0:8000/cards/info/delete
-```
-
-## WebSocket Events
-
-### Message Format
-
-```typescript
-interface WebSocketMessage {
-  type: "update";
-  key: string; // Comma-separated key parts
-  value: unknown; // The updated data
-}
-```
-
-### Event Types
-
-1. Card List Updates (key ends with 'list')
-2. Message Updates (key contains cardId)
-
-## Creating New Card Types
-
-1. Create the directory structure:
-
+## Card System Architecture
+Each card type is self-contained in its directory and must follow this structure:
 ```
 src/cards/[card-name]/
-├── [card-name].ts    # Server-side card class
-├── [card-name].html  # Card template
-└── [card-name].css   # Card styles
+├── [card-name].ts     # Router + Client script
+├── [card-name].html   # Template
+└── [card-name].css    # Styles
 ```
 
-2. Create the server-side card class:
-
+### Creating a New Card Type
+1. Create the directory structure above
+2. Implement the router class extending BaseCardRouter:
 ```typescript
-import { Card, CardState, CardKvEntry } from '../cards.ts';
-
-export interface [CardName]State extends CardState {
-  // Card-specific state
-}
-
-class [CardName]Card extends Card<[CardName]State> {
-  protected override async loadInitialState(): Promise<void> {
-    // Initialize card state
+export class MyCardRouter extends BaseCardRouter {
+  constructor(userId: string) {
+    super('my-card', userId);
   }
 
-  override getState(): [CardName]State {
-    // Return card state
+  async getCards(): Promise<MyCardState[]> {
+    // Implement card listing
   }
 
-  protected override getKvKey(): Deno.KvKey {
-    return ['cards', this.id, this.userId];
-  }
-
-  getAlpineMethods() {
-    return {
-      // Expose methods for client-side use
-    };
+  async handleRequest(req: Request): Promise<Response> {
+    // Implement request handling
   }
 }
 ```
 
-3. Add client-side methods in db/client/[card-name].ts:
-
-```typescript
-export function get[CardName]Methods(): [CardName]Methods {
-  return {
-    // Card-specific client methods
-  };
-}
-```
-
-4. Create HTML template with Alpine.js bindings:
-
+3. Create the template with base card support:
 ```html
-<div
-  class="card [card-name]-card"
-  x-data="{ 
-       // Card-specific data
-     }"
-  x-init="init"
->
-  <!-- Card template -->
-</div>
+<template id="my-card">
+  <div class="card my-card" x-data="getCardMethods()" x-init="init">
+    <!-- Card content -->
+  </div>
+</template>
 ```
 
-## Best Practices
+4. Add card-specific styles:
+```css
+.my-card {
+  /* Card-specific styles */
+}
+```
 
-1. WebSocket Updates:
-   - Use broadcast for all state changes
-   - Include full updated state in broadcasts
-   - Handle reconnection gracefully
+### Card Router Requirements
+- Must extend BaseCardRouter
+- Must implement getCards() and handleRequest()
+- Must be exported from [card-name].ts
+- Should handle these base routes:
+  - GET /cards/[type]/list
+  - POST /cards/[type]/create
+  - POST /cards/[type]/delete
+  - GET /cards/[type]/template
 
-2. KV Operations:
-   - Use atomic operations when possible
-   - Include timestamps for ordering
-   - Handle missing data gracefully
+### Card Template Requirements
+- Must use template tag with id="[card-name]"
+- Must extend base card functionality
+- Should use Alpine.js for interactivity
+- Should use HTMX for server interactions
 
-3. UI Updates:
-   - Use Alpine.js for reactivity
-   - Spread arrays to trigger updates
-   - Clean up event listeners
+### Card Styles Requirements
+- Must be scoped to .[card-name] class
+- Should extend base card styles
+- Should support fullscreen mode
+- Should use CSS variables for theming
 
-4. Error Handling:
-   - Log errors on both sides
-   - Provide user feedback
-   - Handle network issues gracefully
+### JSON API Endpoints
+Each card MUST expose a JSON API endpoint for AI interaction:
+- GET /cards/[card-type]/api - List all cards or get specific card
+  - Query params: ?cardId (optional)
+  - Response: Card state or array of cards
+- POST /cards/[card-type]/api - Create/update card content
+  - Body: Depends on card type
+  - Response: Updated card state
+- DELETE /cards/[card-type]/api - Delete card content
+  - Body: { cardId, [type-specific-id] }
+  - Response: Success status
+
+### Example Card Implementation
+```typescript
+// src/cards/example/example.ts
+import { BaseCardRouter } from '../cardRouter.ts';
+
+export interface ExampleCardState {
+  id: string;
+  name: string;
+  content: unknown;
+  created: number;
+  lastUpdated: number;
+}
+
+export class ExampleCardRouter extends BaseCardRouter {
+  constructor(userId: string) {
+    super('example', userId);
+  }
+
+  // JSON API endpoint handler
+  async handleApiGet(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const cardId = url.searchParams.get('cardId');
+    
+    if (cardId) {
+      const card = await this.getCard(cardId);
+      return new Response(JSON.stringify(card), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const cards = await this.getCards();
+    return new Response(JSON.stringify(cards), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  override async handleRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
+
+    if (path === 'api') {
+      switch (req.method) {
+        case 'GET': return this.handleApiGet(req);
+        case 'POST': return this.handleApiPost(req);
+        case 'DELETE': return this.handleApiDelete(req);
+        default: return new Response('Method not allowed', { status: 405 });
+      }
+    }
+
+    return super.handleRequest(req);
+  }
+}
+```
+
+The purpose of this architecture is to enable both human and AI interaction with cards through:
+1. Human Interface: HTML templates with HTMX and Alpine.js
+2. AI Interface: JSON API endpoints for programmatic access
+3. Shared State: KV storage for persistence and real-time updates
+
+## KV OAuth Structure
+- Sessions: [sessions, userId, timestamp]
+- States: [oauth-states, state, timestamp]
+- Users: [users, provider, providerId]
+
+## Project Structure
+/
+├── db/                # Database layer
+│   ├── core/         # Core KV operations
+│   ├── client/       # Type-safe client APIs
+│   └── router.ts     # Database request router
+├── src/
+│   ├── cards/        # Card components
+│   │   ├── base-card.html  # Base card template
+│   │   └── [card-name]/    # Card implementations
+│   ├── middleware/   # Request middleware
+│   ├── modals/       # Modal components
+│   ├── views/        # View handlers
+│   └── kv/           # KV utilities
+├── public/           # Static assets
+├── deno.json        # Config file
+└── main.ts          # Entry point
+
+## Database Architecture
+The database layer is simple and direct:
+
+```typescript
+// db/core/kv.ts
+export type KvKeyPart = string | number | bigint | boolean | Uint8Array;
+export type KvKey = KvKeyPart[];
+
+export const kv = await Deno.openKv();
+```
+
+### Using KV
+Import and use KV directly:
+
+```typescript
+import { kv, type KvKey } from "../../db/core/kv.ts";
+
+// Basic operations
+const value = await kv.get(['users', userId]);
+await kv.set(['users', userId], userData);
+await kv.delete(['users', userId]);
+
+// List operations
+const users = kv.list({ prefix: ['users'] });
+for await (const user of users) {
+  console.log(user);
+}
+
+// Atomic operations
+await kv.atomic()
+  .check({ key: ['users', userId], versionstamp: oldVersion })
+  .set(['users', userId], newData)
+  .commit();
+```
+
+### Key Structure
+Keys should follow these patterns:
+- Collection prefix: ['users', 'cards', 'sessions']
+- Resource ID: ['users', userId]
+- Nested data: ['cards', cardId, 'messages']
+
+### Best Practices
+- Use type-safe keys with KvKey type
+- Use atomic operations for consistency
+- Use list operations with prefixes
+- Keep keys short and meaningful
+- Use broadcasts for real-time updates
+
+## View Architecture
+Views are handled through a dedicated ViewRouter that:
+1. Manages template loading
+2. Handles view-specific routes
+3. Integrates with middleware
+4. Manages view state
+
+## Card Architecture
+Cards now follow a base template pattern:
+1. Inherit from base-card.html
+2. Use shared card styles
+3. Implement fullscreen capability
+4. Support dynamic loading
+5. Expose JSON API endpoints
+
+## Development Rules
+- Always use native Deno APIs over third-party modules
+- If you can't solve with deno native then use hono from jsr
+- Co-locate related code (HTML, CSS, behavior) in component directories
+- Use KV OAuth for authentication flows
+- Implement PKCE flow for security
+- Store sessions in KV with proper expiration
+- Handle OAuth state verification
+- Implement proper session cleanup
+- Use semantic HTML elements
+- Write self-documenting code with clear naming
+- Keep components small and focused
+- Ensure proper TypeScript types
+- Follow OAuth security best practices
+- Include error handling
+- Write performant code
+
+## IDE Settings
+- Quotes: single
+- Indent: 2
+- Max Line Length: 80
+- TypeScript:
+  - strict: true
+  - noImplicitAny: true
+
+## OAuth Configuration
+- Session Duration: 7d
+- State Duration: 10m
+- Secure: true
+- SameSite: Lax
+
+## Naming Conventions
+- Components: PascalCase
+- Pages: camelCase
+- API: kebab-case
+- Styles: kebab-case
+
+## File Extensions
+- TypeScript: .ts
+- Styles: .css
+- Templates: .html
+
+## Development Commands
+```json
+{
+  "tasks": {
+    "dev": "deno run --watch --allow-net --allow-read server.ts",
+    "start": "deno run --allow-net --allow-read server.ts"
+  }
+}
+```
+
+## Prohibited Practices
+- Build steps or bundlers
+- Client-side routing
+- Complex state management
+- External dependencies when Deno stdlib suffices
+- Framework abstractions
+- jQuery or similar libraries
+- Custom session implementations
+- Manual OAuth flows
+- Client-side OAuth state management
+- Session storage outside of KV
+- Modifying main.ts for card routing (use card system)
+- Direct KV access (use db/client APIs)
+- Manual template loading (use ViewRouter)
+- Inline styles (use component CSS)
+- Direct WebSocket handling (use card events)
+
+## Component Structure
+Each component must:
+- Have its own directory
+- Follow hypermedia patterns
+- Use HTMX for updates
+- Implement Alpine.js for interactivity
+
+## Performance Guidelines
+- Minimize client-side JavaScript
+- Use native Deno features
+- Implement proper caching
+- Optimize KV queries
+- Follow HTMX best practices
+
+## Documentation Requirements
+- Clear component documentation
+- Type definitions
+- Security considerations
+- Usage examples
+- API documentation

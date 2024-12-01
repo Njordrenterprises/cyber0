@@ -1,0 +1,28 @@
+.test-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-backdrop);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  color: var(--text-primary);
+  height: 400px;
+  max-height: 400px;
+}
+
+.test-card .card-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--spacing-lg);
+  gap: var(--spacing-md);
+  overflow: hidden;
+}
+
+.test-card .test-label {
+  font-family: monospace;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  margin-top: auto;
+  margin-bottom: auto;
+}

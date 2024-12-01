@@ -1,10 +1,12 @@
 <div x-data="{ 
   open: false,
   cardName: '',
+  cardType: 'info',
   async createCard() {
     if (!this.cardName.trim()) return;
-    await window.cardData.info.createCard(this.cardName);
+    await window.cardData[this.cardType].createCard(this.cardName);
     this.cardName = '';
+    this.cardType = 'info';
     this.open = false;
     // Trigger card list refresh in parent component
     const infoCard = document.querySelector('.info-card').__x.$data;
@@ -40,11 +42,24 @@
 
         <!-- Content -->
         <div class="modal-body">
-          <input type="text"
-                 x-model="cardName"
-                 placeholder="Enter card name"
-                 class="modal-input"
-                 @keyup.enter="createCard()">
+          <div class="input-group">
+            <label for="cardType">Card Type</label>
+            <select id="cardType" 
+                    x-model="cardType" 
+                    class="modal-select">
+              <option value="info">Info Card</option>
+              <option value="test">Test Card</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="cardName">Card Name</label>
+            <input type="text"
+                   id="cardName"
+                   x-model="cardName"
+                   placeholder="Enter card name"
+                   class="modal-input"
+                   @keyup.enter="createCard()">
+          </div>
         </div>
 
         <!-- Buttons -->

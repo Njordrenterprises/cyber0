@@ -1,164 +1,87 @@
-import { broadcast } from "../ws/broadcast.ts";
-import { validateContentType, validateCardInput, validateMessageInput, validateCardExists } from "../middleware/validation.ts";
-import type { CreateCardRequest, MessageRequest, ErrorResponse } from "../types.ts";
-import { parseJsonSafely } from "../utils.ts";
-import { createCard, deleteCard, getCards, addMessage, deleteMessage } from "./cards.ts";
-import { getUserById } from "../services/user-service.ts";
-
-export interface CardRouter {
-  handleRequest(req: Request): Promise<Response>;
-}
-
-export class BaseCardRouter implements CardRouter {
+export abstract class BaseCardRouter {
   constructor(
     protected readonly cardType: string,
     protected readonly userId: string = 'test-user'
   ) {}
 
-  handleRequest(req: Request): Promise<Response> {
+  abstract handleRequest(req: Request): Promise<Response>;
+  abstract getCards(): Promise<unknown[]>;
+}
+
+export class CardRouter {
+  private routers: Map<string, BaseCardRouter> = new Map();
+  private templates: Map<string, string> = new Map();
+  private readonly userId: string;
+
+  constructor(userId: string) {
+    this.userId = userId;
+  }
+
+  private async loadCardTemplate(cardType: string): Promise<string> {
+    // Check cache first
+    const cached = this.templates.get(cardType);
+    if (cached) return cached;
+
+    try {
+      const content = await Deno.readTextFile(new URL(`./${cardType}/${cardType}.html`, import.meta.url));
+      this.templates.set(cardType, content);
+      return content;
+    } catch (_error) {
+      throw new Error(`Failed to load template for card type: ${cardType}`);
+    }
+  }
+
+  private async loadCardRouter(cardType: string): Promise<BaseCardRouter | undefined> {
+    try {
+      const module = await import(`./${cardType}/${cardType}.ts`);
+      // Look for RouterClass export (e.g., InfoCardRouter, TestCardRouter)
+      const RouterClass = Object.values(module).find(
+        (exp): exp is new (userId: string) => BaseCardRouter => 
+          typeof exp === 'function' && 
+          exp.prototype instanceof BaseCardRouter
+      );
+
+      if (RouterClass) {
+        const router = new RouterClass(this.userId);
+        this.routers.set(cardType, router);
+        return router;
+      }
+    } catch (_error) {
+      console.error(`Failed to load card router for type ${cardType}`);
+    }
+    return undefined;
+  }
+
+  async handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
-    const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
-
-    // Validate content type for POST requests
-    if (req.method === 'POST') {
-      const contentTypeError = validateContentType(req);
-      if (contentTypeError) return Promise.resolve(contentTypeError);
+    const match = url.pathname.match(/^\/cards\/([^\/]+)/);
+    if (!match) {
+      return new Response('Not Found', { status: 404 });
     }
 
-    switch (path) {
-      case 'list':
-        return this.handleList(req);
-      case 'create':
-        return this.handleCreate(req);
-      case 'delete':
-        return this.handleDelete(req);
-      case 'message/add':
-        return this.handleMessageAdd(req);
-      case 'message/delete':
-        return this.handleMessageDelete(req);
-      default:
-        return Promise.resolve(new Response('Not Found', { status: 404 }));
-    }
-  }
-
-  protected async handleList(_req: Request): Promise<Response> {
-    const cards = await getCards(this.userId, this.cardType);
-    return new Response(JSON.stringify(cards), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  protected async handleCreate(req: Request): Promise<Response> {
-    const { data, error } = await parseJsonSafely<CreateCardRequest>(req);
-    if (error) return error;
-    if (!data) return new Response(JSON.stringify({ error: 'Missing request data' } satisfies ErrorResponse), { 
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const inputError = validateCardInput(data);
-    if (inputError) return inputError;
-
-    // Get user info
-    const user = await getUserById(this.userId);
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'User not found' } satisfies ErrorResponse), { 
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    const cardType = match[1];
+    let router = this.routers.get(cardType);
+    
+    // Load router if not already loaded
+    if (!router) {
+      router = await this.loadCardRouter(cardType);
+      if (!router) {
+        return new Response('Card type not found', { status: 404 });
+      }
     }
 
-    try {
-      const card = await createCard(
-        this.userId, 
-        user.username, 
-        this.cardType,
-        data.name, 
-        user.color,
-        user.sprite
-      );
-      return new Response(JSON.stringify(card), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error creating card:', error);
-      return new Response(JSON.stringify({ error: 'Error creating card' } satisfies ErrorResponse), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  protected async handleDelete(req: Request): Promise<Response> {
-    try {
-      const { cardId } = await req.json();
-      await deleteCard(this.userId, cardId, this.cardType);
-      const cards = await getCards(this.userId, this.cardType);
-      broadcast({
-        type: 'update',
-        key: `cards,${this.cardType},global,list`,
-        value: cards
-      });
-      return new Response('OK');
-    } catch (error) {
-      console.error('Error deleting card:', error);
-      return new Response('Error deleting card', { status: 500 });
-    }
-  }
-
-  protected async handleMessageAdd(req: Request): Promise<Response> {
-    const { data, error } = await parseJsonSafely<MessageRequest>(req);
-    if (error) return error;
-    if (!data) return new Response(JSON.stringify({ error: 'Missing request data' } satisfies ErrorResponse), { 
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    const inputError = validateMessageInput(data);
-    if (inputError) return inputError;
-
-    const cardError = await validateCardExists(this.userId, data.cardId, this.cardType);
-    if (cardError) return cardError;
-
-    // Get user info
-    const user = await getUserById(this.userId);
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'User not found' } satisfies ErrorResponse), { 
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    // Handle template requests
+    if (url.pathname.endsWith('/template')) {
+      try {
+        const template = await this.loadCardTemplate(cardType);
+        return new Response(template, {
+          headers: { 'Content-Type': 'text/html' }
+        });
+      } catch (_error) {
+        return new Response('Template not found', { status: 404 });
+      }
     }
 
-    try {
-      const message = await addMessage(
-        this.userId,
-        user.username,
-        this.cardType,
-        data.cardId,
-        data.text,
-        user.color,
-        user.sprite
-      );
-      return new Response(JSON.stringify(message), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error adding message:', error);
-      return new Response(JSON.stringify({ error: 'Error adding message' } satisfies ErrorResponse), { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-  }
-
-  protected async handleMessageDelete(req: Request): Promise<Response> {
-    try {
-      const { cardId, messageId } = await req.json();
-      await deleteMessage(this.userId, this.cardType, cardId, messageId);
-      return new Response('OK');
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      return new Response('Error deleting message', { status: 500 });
-    }
+    return router.handleRequest(req);
   }
 } 

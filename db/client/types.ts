@@ -23,14 +23,14 @@ export interface BaseCard {
 }
 
 // Shared card methods that all cards will have
-export interface BaseCardMethods {
+export interface CardMethods {
   createCard: (name: string) => Promise<BaseCard>;
   deleteCard: (cardId: string) => Promise<void>;
   getCards: () => Promise<BaseCard[]>;
 }
 
 // Info card specific methods
-export interface InfoCardMethods extends BaseCardMethods {
+export interface InfoCardMethods extends CardMethods {
   kv: KvMethods;
   userId: string;
   handleKvUpdate: (cardId: string, newMessage: string) => Promise<void>;
@@ -38,33 +38,45 @@ export interface InfoCardMethods extends BaseCardMethods {
   loadCardMessages: (cardId: string) => Promise<CardMessage[]>;
 }
 
-export interface CardData {
-  info: InfoCardMethods;
+// Test card specific methods
+export interface TestCardMethods extends CardMethods {
+  // Add any test-specific methods here
 }
 
-// Augment globalThis with our custom properties
+export interface CardData {
+  info?: InfoCardMethods;
+  test?: TestCardMethods;
+}
+
+// User context types
+export interface UserContext {
+  id: string;
+  username: string;
+  color: string;
+  sprite: string;
+  created: number;
+  lastSeen: number;
+}
+
+export interface UserWidget {
+  init: () => Promise<UserContext | null>;
+}
+
+// Augment the global scope
 declare global {
-  interface UserContext {
-    id: string;
-    username: string;
-    color: string;
-    sprite: string;
-    created: number;
-    lastSeen: number;
+  interface Window {
+    cardData: CardData;
+    userContext: UserContext;
+    userWidget: UserWidget;
   }
 
-  interface UserWidget {
-    init: () => Promise<UserContext | null>;
-  }
-
-  interface GlobalThis {
-    userContext?: UserContext;
-    userWidget?: UserWidget;
-    cardData?: CardData;
-  }
+  // Make Window properties available in globalThis
+  const cardData: CardData;
+  const userContext: UserContext;
+  const userWidget: UserWidget;
 }
 
 // Use this to access cardData in a cross-platform way
 export const getCardData = (): CardData => {
-  return globalThis.cardData!;
+  return (globalThis as unknown as Window).cardData;
 }; 

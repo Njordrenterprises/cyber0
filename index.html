@@ -6,72 +6,45 @@
     <title>Cyber Framework</title>
     
     <!-- PWA Support -->
-    <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     
     <!-- Base Styles -->
-    <link rel="stylesheet" href="/main.css">
-    <link rel="stylesheet" href="/src/cards/cards.css">
-    <link rel="stylesheet" href="/src/cards/info/info.css">
-    <link rel="stylesheet" href="/src/modals/modal.css">
-    <link rel="stylesheet" href="/widgets/user/user.css">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/widgets.css">
+    <link rel="stylesheet" href="/css/cards.css">
+    <link rel="stylesheet" href="/css/info.css">
+    <link rel="stylesheet" href="/css/test.css">
+    <link rel="stylesheet" href="/css/modal.css">
+    <link rel="stylesheet" href="/css/user.css">
     
     <!-- Client Scripts -->
-    <script src="/js/htmx.min.js"></script>
-    <script defer src="/js/alpine.min.js"></script>
-    <script type="module">
-        import { createIcons, User, Plus, MessageSquare, Trash2 } from 'npm:lucide';
-        
-        // Initialize only the icons we need
-        createIcons({
-            icons: {
-                User,
-                Plus,
-                MessageSquare,
-                Trash2
-            }
-        });
-    </script>
+    <script src="/static/js/htmx.min.js"></script>
+    <script defer src="/static/js/alpine.min.js"></script>
 </head>
 <body>
-    <div id="app"></div>
+    <div id="app" 
+         hx-get="/api/views/home" 
+         hx-trigger="load"
+         hx-swap="innerHTML">
+    </div>
     <script>
         // Initialize cardData
         globalThis.cardData = globalThis.cardData || {};
         
         // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.register('/static/sw.js')
                 .then(() => console.log('Service Worker registered'))
                 .catch(err => console.error('Service Worker registration failed:', err));
         }
-        
-        // Load the view after Alpine.js is ready
-        function loadView() {
-            const app = document.getElementById('app');
-            fetch('/views/home')
-                .then(response => response.text())
-                .then(html => {
-                    // Extract and evaluate scripts first
-                    const scriptContent = html.match(/<script>([\s\S]*?)<\/script>/)?.[1] || '';
-                    const cleanHtml = html.replace(/<script>[\s\S]*?<\/script>/, '');
-                    
-                    // Evaluate scripts
-                    eval(scriptContent);
-                    
-                    // Set the HTML content
-                    app.innerHTML = cleanHtml;
-                });
-        }
 
-        // Wait for Alpine.js to be ready
-        if (typeof Alpine === 'undefined') {
-            document.addEventListener('alpine:init', loadView);
-        } else {
-            loadView();
-        }
+        // Initialize Alpine.js
+        document.addEventListener('alpine:init', () => {
+            console.log('Alpine.js initialized');
+        });
     </script>
 </body>
 </html> 
