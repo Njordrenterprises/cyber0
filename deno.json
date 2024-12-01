@@ -4,8 +4,9 @@
     "start": "deno run --unstable-broadcast-channel --unstable-kv --allow-net --allow-read --allow-write --allow-env main.ts",
     "test": "deno test --unstable-broadcast-channel --unstable-kv --allow-net --allow-read",
     "test:cards": "deno test --unstable-broadcast-channel --unstable-kv --allow-net tests/ai/curlCards.ts",
-    "test:messages": "deno test --unstable-broadcast-channel --unstable-kv --allow-net tests/ai/message_test.ts",
-    "test:all": "deno test --unstable-broadcast-channel --unstable-kv --allow-net --allow-read tests/ai/"
+    "test:messages": "deno test --unstable-broadcast-channel --unstable-kv --allow-net --allow-read --allow-write tests/ai/message_test.ts",
+    "test:all": "deno test --unstable-broadcast-channel --unstable-kv --allow-net --allow-read tests/ai/",
+    "kill": "./scripts/kill_deno.sh"
   },
   "imports": {
     "jsr:@std/": "jsr:@std/",

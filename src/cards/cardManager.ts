@@ -34,7 +34,10 @@ export class CardManager {
 
   private async loadCardRouter(cardType: string): Promise<BaseCardRouter | undefined> {
     try {
+      console.log(`Loading router for card type: ${cardType}`);
       const module = await import(`./${cardType}/${cardType}.ts`);
+      console.log('Module loaded:', Object.keys(module));
+      
       // Look for RouterClass export (e.g., InfoCardRouter, TestCardRouter)
       const RouterClass = Object.values(module).find(
         (exp): exp is new (userId: string, author: CardAuthor) => BaseCardRouter => 
@@ -43,12 +46,15 @@ export class CardManager {
       );
 
       if (RouterClass) {
+        console.log('Found router class:', RouterClass.name);
         const router = new RouterClass(this.user.id, this.userAsAuthor);
         this.routers.set(cardType, router);
         return router;
+      } else {
+        console.log('No router class found in module');
       }
-    } catch (_error) {
-      console.error(`Failed to load card router for type ${cardType}`);
+    } catch (error) {
+      console.error(`Failed to load card router for type ${cardType}:`, error);
     }
     return undefined;
   }
@@ -56,16 +62,23 @@ export class CardManager {
   async handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const match = url.pathname.match(/^\/cards\/([^\/]+)/);
+    console.log('Request URL:', url.pathname);
+    console.log('Card type match:', match);
+    
     if (!match) {
       return new Response('Not Found', { status: 404 });
     }
 
     const cardType = match[1];
+    console.log('Looking for card type:', cardType);
     let router = this.routers.get(cardType);
+    console.log('Existing router:', router ? 'found' : 'not found');
     
     // Load router if not already loaded
     if (!router) {
+      console.log('Attempting to load router for:', cardType);
       router = await this.loadCardRouter(cardType);
+      console.log('Load result:', router ? 'success' : 'failed');
       if (!router) {
         return new Response('Card type not found', { status: 404 });
       }

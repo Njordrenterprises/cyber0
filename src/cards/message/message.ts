@@ -56,10 +56,10 @@ export class MessageCardRouter extends BaseCardRouter {
           threadCount: 0,
           lastMessageTime: timestamp,
           permissions: {
-            canSend: [this.user.id],
-            canEdit: [this.user.id],
-            canDelete: [this.user.id],
-            canReact: [this.user.id]
+            canSend: ['*'],
+            canEdit: ['*'],
+            canDelete: ['*'],
+            canReact: ['*']
           }
         }
       };
@@ -166,11 +166,21 @@ export class MessageCardRouter extends BaseCardRouter {
         });
       }
 
-      const message = await this.sendMessage(cardId, content, options);
-      return new Response(JSON.stringify(message), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      try {
+        const message = await this.sendMessage(cardId, content, options);
+        return new Response(JSON.stringify(message), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Card not found') {
+          return new Response(JSON.stringify({ error: 'Card not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('Error adding message:', error);
       return new Response(JSON.stringify({ error: 'Internal server error' }), {
@@ -234,5 +244,169 @@ export class MessageCardRouter extends BaseCardRouter {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  }
+
+  protected override async handleMessageDelete(req: Request): Promise<Response> {
+    try {
+      const url = new URL(req.url);
+      const cardId = url.searchParams.get('cardId');
+      const messageId = url.searchParams.get('messageId');
+
+      if (!cardId || !messageId) {
+        return new Response(JSON.stringify({ error: 'Card ID and Message ID are required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<MessageState>(key);
+
+      if (!entry?.value) {
+        return new Response(JSON.stringify({ error: 'Card not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const state = entry.value;
+      const messageIndex = state.messages.findIndex(m => m.id === messageId);
+
+      if (messageIndex === -1) {
+        return new Response(JSON.stringify({ error: 'Message not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if user has permission to delete
+      const message = state.messages[messageIndex];
+      if (message.author.id !== this.user.id && 
+          !state.metadata.permissions.canDelete.includes(this.user.id) &&
+          !state.metadata.permissions.canDelete.includes('*')) {
+        return new Response(JSON.stringify({ error: 'Permission denied' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Remove message
+      state.messages.splice(messageIndex, 1);
+      state.metadata.messageCount--;
+
+      // Also remove from thread if it exists
+      if (message.parentId) {
+        const thread = state.threads.find(t => t.id === message.parentId);
+        if (thread) {
+          const threadMessageIndex = thread.messages.findIndex(m => m.id === messageId);
+          if (threadMessageIndex !== -1) {
+            thread.messages.splice(threadMessageIndex, 1);
+            thread.lastActivity = thread.messages.length > 0 
+              ? Math.max(...thread.messages.map(m => m.timestamp))
+              : thread.lastActivity;
+          }
+        }
+      }
+
+      await kv.set(key, state);
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  protected async handleMessageEdit(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      const { cardId, messageId, content } = data;
+
+      if (!cardId || !messageId || !content) {
+        return new Response(JSON.stringify({ error: 'Card ID, Message ID, and content are required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const key: KvKey = ['cards', this.cardType, 'data', cardId];
+      const entry = await kv.get<MessageState>(key);
+
+      if (!entry?.value) {
+        return new Response(JSON.stringify({ error: 'Card not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const state = entry.value;
+      const message = state.messages.find(m => m.id === messageId);
+
+      if (!message) {
+        return new Response(JSON.stringify({ error: 'Message not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if user has permission to edit
+      if (message.author.id !== this.user.id && 
+          !state.metadata.permissions.canEdit.includes(this.user.id) &&
+          !state.metadata.permissions.canEdit.includes('*')) {
+        return new Response(JSON.stringify({ error: 'Permission denied' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Update message
+      message.content = content;
+      message.metadata = {
+        ...message.metadata,
+        edited: true,
+        editedAt: Date.now()
+      };
+
+      // Also update in thread if it exists
+      if (message.parentId) {
+        const thread = state.threads.find(t => t.id === message.parentId);
+        if (thread) {
+          const threadMessage = thread.messages.find(m => m.id === messageId);
+          if (threadMessage) {
+            threadMessage.content = content;
+            threadMessage.metadata = message.metadata;
+          }
+        }
+      }
+
+      await kv.set(key, state);
+      return new Response(JSON.stringify(message), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error editing message:', error);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  protected override async handleRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
+
+    // Handle message edit endpoint
+    if (path === 'api/messages/edit' && req.method === 'PUT') {
+      return this.handleMessageEdit(req);
+    }
+
+    return super.handleRequest(req);
   }
 }
