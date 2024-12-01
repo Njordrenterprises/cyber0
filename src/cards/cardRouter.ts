@@ -6,16 +6,45 @@ import type {
   KvCardData,
   KvCardMeta,
   CardOperations,
-  KvKey
+  KvKey,
+  User
 } from '../../db/client/types.ts';
 import * as kvBroadcast from '../ws/kvBroadcast.ts';
 
 export abstract class BaseCardRouter implements CardOperations {
-  protected constructor(
-    protected readonly cardType: string,
-    protected readonly userId: string,
-    protected readonly user: CardAuthor
-  ) {}
+  protected cardType: string;
+  protected user: User;
+
+  constructor(cardType: string, userId: string, author: CardAuthor) {
+    this.cardType = cardType;
+    this.user = {
+      id: userId,
+      name: author.username,
+      username: author.username,
+      email: '',
+      type: author.type,
+      color: author.color,
+      sprite: author.sprite,
+      created: Date.now(),
+      lastSeen: Date.now(),
+      preferences: {
+        theme: 'dark',
+        language: 'en',
+        notifications: true
+      },
+      capabilities: {
+        canCreateCards: true,
+        canDeleteCards: true,
+        canSendMessages: true,
+        canModifyUsers: false,
+        allowedCardTypes: ['info', 'test']
+      }
+    };
+  }
+
+  protected setUser(user: User) {
+    this.user = user;
+  }
 
   async createCard(name: string): Promise<BaseCard> {
     const cardId = crypto.randomUUID();
@@ -125,7 +154,10 @@ export abstract class BaseCardRouter implements CardOperations {
       return cards;
     } catch (error) {
       console.error('Error getting cards:', error);
-      throw new Error(`Failed to get cards: ${error.message}`);
+      if (error instanceof Error) {
+        throw new Error(`Failed to get cards: ${error.message}`);
+      }
+      throw new Error('Failed to get cards: Unknown error');
     }
   }
 
@@ -171,5 +203,213 @@ export abstract class BaseCardRouter implements CardOperations {
   }
 
   // Request Handling
-  abstract handleRequest(req: Request): Promise<Response>;
+  handleRequest(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
+
+    // Handle base routes
+    switch (path) {
+      case 'list':
+        return this.handleList();
+      case 'create':
+        return this.handleCreate(req);
+      case 'delete':
+        return this.handleDelete(req);
+    }
+
+    // Handle API endpoints
+    if (path === 'api') {
+      switch (req.method) {
+        case 'GET':
+          return this.handleApiGet(req);
+        case 'POST':
+          return this.handleMessageAdd(req);
+        case 'DELETE':
+          return this.handleMessageDelete(req);
+        default:
+          return Promise.resolve(new Response('Method not allowed', { status: 405 }));
+      }
+    }
+
+    return Promise.resolve(new Response('Not Found', { status: 404 }));
+  }
+
+  protected async handleList(): Promise<Response> {
+    try {
+      const cards = await this.getCards();
+      return new Response(JSON.stringify(cards), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error listing cards:', error);
+      return new Response(JSON.stringify({ error: 'Failed to list cards' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  }
+
+  protected async handleCreate(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      if (!data.name) {
+        return new Response(JSON.stringify({ error: 'Name is required' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+
+      const card = await this.createCard(data.name);
+      return new Response(JSON.stringify(card), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error creating card:', error);
+      if (error instanceof Error && error.message.includes('invalid json')) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ error: 'Failed to create card' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  }
+
+  protected async handleDelete(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      if (!data.cardId) {
+        return new Response(JSON.stringify({ error: 'Card ID is required' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+
+      await this.deleteCard(data.cardId);
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Error deleting card:', error);
+      if (error instanceof Error && error.message.includes('invalid json')) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ error: 'Failed to delete card' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  }
+
+  protected async handleApiGet(req: Request): Promise<Response> {
+    try {
+      const url = new URL(req.url);
+      const cardId = url.searchParams.get('cardId');
+      if (!cardId) {
+        return new Response(JSON.stringify({ error: 'Card ID is required' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+
+      const card = await this.getCard(cardId);
+      return new Response(JSON.stringify(card), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found')) {
+        return new Response(JSON.stringify({ error: 'Card not found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      console.error('Error getting card:', error);
+      return new Response(JSON.stringify({ error: 'Failed to get card' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  }
+
+  protected async handleMessageAdd(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      if (!data.cardId || !data.text) {
+        return new Response(JSON.stringify({ error: 'Card ID and text are required' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+
+      const message = await this.addMessage(data.cardId, data.text);
+      return new Response(JSON.stringify(message), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found')) {
+        return new Response(JSON.stringify({ error: 'Card not found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      console.error('Error adding message:', error);
+      if (error instanceof Error && error.message.includes('invalid json')) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ error: 'Failed to add message' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  }
+
+  protected async handleMessageDelete(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      if (!data.cardId || !data.messageId) {
+        return new Response(JSON.stringify({ error: 'Card ID and message ID are required' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+
+      await this.deleteMessage(data.cardId, data.messageId);
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found')) {
+        return new Response(JSON.stringify({ error: 'Card or message not found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      console.error('Error deleting message:', error);
+      if (error instanceof Error && error.message.includes('invalid json')) {
+        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify({ error: 'Failed to delete message' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' }
+      });
+    }
+  }
 } 

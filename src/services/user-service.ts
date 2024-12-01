@@ -29,15 +29,25 @@ export async function getOrCreateUser(req: Request): Promise<{ user: User; respo
   // Create new user
   const newUser: User = {
     id: crypto.randomUUID(),
-    username: `User${Math.floor(Math.random() * 10000)}`,
+    name: `User ${Math.floor(Math.random() * 10000)}`,
+    username: `user${Math.floor(Math.random() * 10000)}`,
     email: '', // Will be set by user later
+    type: 'human',
     color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
     sprite: `sprite${Math.floor(Math.random() * 10) + 1}`,
     created: Date.now(),
     lastSeen: Date.now(),
     preferences: {
       theme: 'dark' as const,
-      language: 'en'
+      language: 'en',
+      notifications: true
+    },
+    capabilities: {
+      canCreateCards: true,
+      canDeleteCards: true,
+      canSendMessages: true,
+      canModifyUsers: false,
+      allowedCardTypes: ['info', 'test']
     }
   };
 

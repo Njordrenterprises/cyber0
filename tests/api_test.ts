@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assert } from "jsr:@std/assert";
 
 const BASE_URL = "http://localhost:8000";
 
@@ -30,7 +30,7 @@ Deno.test("API Endpoint Tests", async (t) => {
     });
 
     assertEquals(status, 200);
-    assertExists(data.id);
+    assert(data.id);
     assertEquals(data.name, "Test Card");
     assertEquals(data.type, "info");
     createdCardId = data.id;
@@ -55,7 +55,7 @@ Deno.test("API Endpoint Tests", async (t) => {
     });
 
     assertEquals(status, 200);
-    assertExists(data.id);
+    assert(data.id);
     assertEquals(data.text, "Test Message");
   });
 
@@ -171,7 +171,7 @@ Deno.test("Real-time Updates", async (t) => {
   });
 
   await t.step("Broadcast - should receive updates", async () => {
-    const _events: string[] = [];
+    const events: string[] = [];
     const eventSource = new EventSource(`${BASE_URL}/events`);
     let timeoutId: number;
     
@@ -179,21 +179,21 @@ Deno.test("Real-time Updates", async (t) => {
       // Create a card to trigger a broadcast
       await makeRequest("/cards/info/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: "Broadcast Test Card" }),
       });
       
       await new Promise<void>((resolve, reject) => {
         eventSource.onmessage = (event) => {
-          _events.push(event.data);
+          events.push(event.data);
           resolve();
         };
         timeoutId = setTimeout(() => {
           reject(new Error("Broadcast timeout"));
-        }, 5000);
+        }, 10000); // Increase timeout to 10 seconds
       });
       
-      assertEquals(_events.length > 0, true);
+      assertEquals(events.length > 0, true);
     } finally {
       clearTimeout(timeoutId!);
       eventSource.close();

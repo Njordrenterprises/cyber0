@@ -1,211 +1,142 @@
-import type { ApiResponse, BaseCard, CardMessage, CardCommand, CardResponse, AnyEvent, User, CardPlugin } from "../../db/client/types.ts";
-
-const API_BASE = "http://localhost:8000";
-
-async function makeRequest<T>(path: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers
-    }
-  });
-
-  const data = await response.json();
-  return {
-    status: response.status,
-    data: data as T,
-    error: !response.ok ? data.error : undefined
-  };
-}
+import type {
+  ApiResponse,
+  BaseCard,
+  CardMessage,
+  CardCommand,
+  CardEvent,
+  User
+} from "../../db/client/types.ts";
 
 export const AiCommands = {
   Card: {
-    async getCards(type: string): Promise<ApiResponse<BaseCard[]>> {
-      return makeRequest(`/cards/${type}/list`);
-    },
-
-    async getCard(type: string, cardId: string): Promise<ApiResponse<BaseCard>> {
-      return makeRequest(`/cards/${type}/${cardId}`);
-    },
-
-    async createCard(type: string, name: string): Promise<ApiResponse<BaseCard>> {
-      return makeRequest(`/cards/${type}/create`, {
+    create(type: string, data: Record<string, unknown>): Promise<ApiResponse<BaseCard>> {
+      return fetch(`/cards/${type}/create`, {
         method: 'POST',
-        body: JSON.stringify({ name })
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then(handleResponse);
     },
 
-    async deleteCard(type: string, cardId: string): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/cards/${type}/delete`, {
+    list(type: string): Promise<ApiResponse<BaseCard[]>> {
+      return fetch(`/cards/${type}/list`).then(handleResponse);
+    },
+
+    get(type: string, cardId: string): Promise<ApiResponse<BaseCard>> {
+      return fetch(`/cards/${type}/api?cardId=${cardId}`).then(handleResponse);
+    },
+
+    addMessage(type: string, cardId: string, text: string): Promise<ApiResponse<CardMessage>> {
+      return fetch(`/cards/${type}/api`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId, text })
+      }).then(handleResponse);
+    },
+
+    getMessages(type: string, cardId: string): Promise<ApiResponse<CardMessage[]>> {
+      return fetch(`/cards/${type}/api/messages?cardId=${cardId}`).then(handleResponse);
+    },
+
+    delete(type: string, cardId: string): Promise<ApiResponse<{ success: boolean }>> {
+      return fetch(`/cards/${type}/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cardId })
-      });
+      }).then(handleResponse);
     },
 
-    async sendMessage(cardId: string, content: string): Promise<ApiResponse<CardMessage>> {
-      return makeRequest(`/cards/${cardId}/message`, {
+    command(type: string, cardId: string, command: CardCommand): Promise<ApiResponse<unknown>> {
+      return fetch(`/cards/${type}/api/command`, {
         method: 'POST',
-        body: JSON.stringify({ content })
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId, command })
+      }).then(handleResponse);
     },
 
-    async getMessages(cardId: string, options?: { limit?: number; before?: number }): Promise<ApiResponse<CardMessage[]>> {
-      const params = new URLSearchParams();
-      if (options?.limit) params.set('limit', options.limit.toString());
-      if (options?.before) params.set('before', options.before.toString());
-      return makeRequest(`/cards/${cardId}/messages?${params}`);
-    },
-
-    async executeCommand(command: CardCommand): Promise<ApiResponse<CardResponse>> {
-      return makeRequest(`/cards/${command.target.cardId}/command`, {
+    event(type: string, cardId: string, event: CardEvent): Promise<ApiResponse<unknown>> {
+      return fetch(`/cards/${type}/api/event`, {
         method: 'POST',
-        body: JSON.stringify(command)
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardId, event })
+      }).then(handleResponse);
     },
 
-    // Plugin methods
-    async registerPlugin(plugin: CardPlugin): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest('/plugins/register', {
+    plugin<T>(action: string, ...args: unknown[]): Promise<ApiResponse<T>> {
+      return fetch('/cards/plugin', {
         method: 'POST',
-        body: JSON.stringify(plugin)
-      });
-    },
-
-    async unregisterPlugin(pluginName: string): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/plugins/${pluginName}/unregister`, {
-        method: 'POST'
-      });
-    },
-
-    async getPluginState(pluginName: string): Promise<ApiResponse<unknown>> {
-      return makeRequest(`/plugins/${pluginName}/state`);
-    },
-
-    async setPluginState(pluginName: string, state: unknown): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/plugins/${pluginName}/state`, {
-        method: 'POST',
-        body: JSON.stringify({ state })
-      });
-    },
-
-    async getPluginResource(pluginName: string, resourcePath: string): Promise<ApiResponse<unknown>> {
-      return makeRequest(`/plugins/${pluginName}/resources/${resourcePath}`);
-    },
-
-    async setPluginResource(pluginName: string, resourcePath: string, resource: unknown): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/plugins/${pluginName}/resources/${resourcePath}`, {
-        method: 'POST',
-        body: JSON.stringify({ resource })
-      });
-    }
-  },
-
-  View: {
-    async getView(name: string, user: User): Promise<ApiResponse<string>> {
-      return makeRequest(`/views/${name}`, {
-        headers: {
-          'X-User-Id': user.id,
-          'X-User-Data': JSON.stringify(user)
-        }
-      });
-    },
-
-    async getWidget(name: string, user: User): Promise<ApiResponse<string>> {
-      return makeRequest(`/widgets/${name}`, {
-        headers: {
-          'X-User-Id': user.id,
-          'X-User-Data': JSON.stringify(user)
-        }
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, args })
+      }).then(handleResponse);
     }
   },
 
   User: {
-    async get(userId: string): Promise<ApiResponse<User>> {
-      return makeRequest(`/user/${userId}`);
-    },
-
-    async update(userId: string, data: Partial<User>): Promise<ApiResponse<User>> {
-      return makeRequest(`/user/${userId}`, {
-        method: 'PUT',
+    create(data: Partial<User>): Promise<ApiResponse<User>> {
+      return fetch('/users/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
-      });
+      }).then(handleResponse);
     },
 
-    async delete(userId: string): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/user/${userId}`, {
-        method: "DELETE"
-      });
+    get(userId: string): Promise<ApiResponse<User>> {
+      return fetch(`/users/${userId}`).then(handleResponse);
     },
 
-    async createSession(userId: string): Promise<ApiResponse<{ sessionId: string; cookie: string }>> {
-      return makeRequest(`/user/${userId}/session`, {
-        method: 'POST'
-      });
+    update(userId: string, data: Partial<User>): Promise<ApiResponse<User>> {
+      return fetch(`/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then(handleResponse);
     },
 
-    async validateSession(sessionId: string): Promise<ApiResponse<{ valid: boolean }>> {
-      return makeRequest(`/session/${sessionId}/validate`);
+    delete(userId: string): Promise<ApiResponse<{ success: boolean }>> {
+      return fetch(`/users/${userId}`, {
+        method: 'DELETE'
+      }).then(handleResponse);
     }
   },
 
-  Event: {
-    async subscribe(): Promise<ApiResponse<{ connectionId: string }>> {
-      return makeRequest('/events/subscribe');
-    },
-
-    async unsubscribe(connectionId: string): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/events/unsubscribe/${connectionId}`);
-    },
-
-    async publish(event: AnyEvent): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest('/events/publish', {
+  Session: {
+    createSession(userId: string): Promise<ApiResponse<{ sessionId: string }>> {
+      return fetch('/sessions/create', {
         method: 'POST',
-        body: JSON.stringify(event)
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      }).then(handleResponse);
     },
 
-    async getHistory(filter?: { type?: string }): Promise<ApiResponse<AnyEvent[]>> {
-      const params = filter ? `?type=${filter.type}` : '';
-      return makeRequest(`/events/history${params}`);
+    validateSession(sessionId: string): Promise<ApiResponse<boolean>> {
+      return fetch(`/sessions/validate/${sessionId}`).then(handleResponse);
     }
   },
 
-  Kv: {
-    async get<T>(key: string[]): Promise<ApiResponse<T | null>> {
-      return makeRequest(`/db/get`, {
-        method: 'POST',
-        body: JSON.stringify({ key })
-      });
+  View: {
+    getView(name: string, user: User | null): Promise<ApiResponse<string>> {
+      return fetch(`/views/${name}`, {
+        headers: user ? {
+          'X-User-Id': user.id,
+          'X-User-Data': JSON.stringify(user)
+        } : {}
+      }).then(handleResponse);
     },
 
-    async set<T>(key: string[], value: T): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/db/set`, {
-        method: 'POST',
-        body: JSON.stringify({ key, value })
-      });
-    },
-
-    async delete(key: string[]): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/db/delete`, {
-        method: 'POST',
-        body: JSON.stringify({ key })
-      });
-    },
-
-    async list<T>(prefix: string[]): Promise<ApiResponse<T[]>> {
-      return makeRequest(`/db/list`, {
-        method: 'POST',
-        body: JSON.stringify({ prefix })
-      });
-    },
-
-    async atomic(operations: { type: string; key: string[]; value?: unknown }[]): Promise<ApiResponse<{ success: boolean }>> {
-      return makeRequest(`/db/atomic`, {
-        method: 'POST',
-        body: JSON.stringify({ operations })
-      });
+    getWidget(name: string, user: User | null): Promise<ApiResponse<string>> {
+      return fetch(`/widgets/${name}`, {
+        headers: user ? {
+          'X-User-Id': user.id,
+          'X-User-Data': JSON.stringify(user)
+        } : {}
+      }).then(handleResponse);
     }
   }
-}; 
+};
+
+function handleResponse(response: Response) {
+  return response.json().then(data => ({
+    status: response.status,
+    data: response.ok ? data : null,
+    error: !response.ok ? data.error : null
+  }));
+} 

@@ -1,5 +1,3 @@
-import type { User } from '../../src/services/user-service.ts';
-
 // Core Types
 export interface User {
   id: string;
@@ -254,22 +252,43 @@ export interface CardPlugin {
   onCommand?: (command: CardCommand) => Promise<CardResponse>;
   onEvent?: (event: CardEvent) => Promise<void>;
   
-  // Custom methods
-  [key: string]: unknown;
+  // Plugin API
+  getCapabilities?: () => Promise<Record<string, unknown>>;
+  validateConfig?: (config: unknown) => Promise<boolean>;
 }
 
-export interface PluginAPI extends CardAPI {
-  // Plugin-specific operations
+// Plugin Configuration
+export interface PluginConfig {
+  enabled: boolean;
+  settings: Record<string, unknown>;
+}
+
+// Plugin Registry
+export interface PluginRegistry {
   register(plugin: CardPlugin): Promise<void>;
   unregister(pluginName: string): Promise<void>;
+  getPlugin(pluginName: string): CardPlugin | undefined;
+  getPlugins(): CardPlugin[];
+}
+
+// Plugin API
+export interface PluginAPI extends CardAPI {
+  // Plugin lifecycle
+  load(): Promise<void>;
+  unload(): Promise<void>;
   
-  // State management
-  getState(): Promise<unknown>;
-  setState(state: unknown): Promise<void>;
+  // Plugin configuration
+  getConfig(): Promise<PluginConfig>;
+  updateConfig(config: Partial<PluginConfig>): Promise<void>;
   
-  // Resource management
-  getResource(path: string): Promise<unknown>;
-  setResource(path: string, data: unknown): Promise<void>;
+  // Plugin state
+  getState(): Promise<Record<string, unknown>>;
+  setState(state: Record<string, unknown>): Promise<void>;
+  
+  // Plugin events
+  emit(event: CardEvent): Promise<void>;
+  on(eventType: string, handler: (event: CardEvent) => Promise<void>): void;
+  off(eventType: string): void;
 }
 
 // WebSocket Types
@@ -284,5 +303,14 @@ export interface WSMessage {
     };
     [key: string]: unknown;
   };
-} 
+}
+
+// Session Management
+export interface Session {
+  sessionId: string;
+  userId: string;
+  created: number;
+  expires: number;
+  cookie: string;
+  data?: Record<string, unknown>;
 } 
