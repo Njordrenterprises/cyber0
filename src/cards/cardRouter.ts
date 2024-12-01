@@ -1,87 +1,175 @@
-export abstract class BaseCardRouter {
-  constructor(
+import { kv } from '../../db/core/kv.ts';
+import type {
+  BaseCard,
+  CardMessage,
+  CardAuthor,
+  KvCardData,
+  KvCardMeta,
+  CardOperations,
+  KvKey
+} from '../../db/client/types.ts';
+import * as kvBroadcast from '../ws/kvBroadcast.ts';
+
+export abstract class BaseCardRouter implements CardOperations {
+  protected constructor(
     protected readonly cardType: string,
-    protected readonly userId: string = 'test-user'
+    protected readonly userId: string,
+    protected readonly user: CardAuthor
   ) {}
 
-  abstract handleRequest(req: Request): Promise<Response>;
-  abstract getCards(): Promise<unknown[]>;
-}
+  async createCard(name: string): Promise<BaseCard> {
+    const cardId = crypto.randomUUID();
+    const now = Date.now();
 
-export class CardRouter {
-  private routers: Map<string, BaseCardRouter> = new Map();
-  private templates: Map<string, string> = new Map();
-  private readonly userId: string;
+    const meta: KvCardMeta = {
+      id: cardId,
+      type: this.cardType,
+      name,
+      created: now,
+      lastUpdated: now,
+      createdBy: this.user
+    };
 
-  constructor(userId: string) {
-    this.userId = userId;
-  }
-
-  private async loadCardTemplate(cardType: string): Promise<string> {
-    // Check cache first
-    const cached = this.templates.get(cardType);
-    if (cached) return cached;
-
-    try {
-      const content = await Deno.readTextFile(new URL(`./${cardType}/${cardType}.html`, import.meta.url));
-      this.templates.set(cardType, content);
-      return content;
-    } catch (_error) {
-      throw new Error(`Failed to load template for card type: ${cardType}`);
-    }
-  }
-
-  private async loadCardRouter(cardType: string): Promise<BaseCardRouter | undefined> {
-    try {
-      const module = await import(`./${cardType}/${cardType}.ts`);
-      // Look for RouterClass export (e.g., InfoCardRouter, TestCardRouter)
-      const RouterClass = Object.values(module).find(
-        (exp): exp is new (userId: string) => BaseCardRouter => 
-          typeof exp === 'function' && 
-          exp.prototype instanceof BaseCardRouter
-      );
-
-      if (RouterClass) {
-        const router = new RouterClass(this.userId);
-        this.routers.set(cardType, router);
-        return router;
+    const data: KvCardData = {
+      messages: [],
+      timestamp: now,
+      lastUpdated: now,
+      meta: {
+        name,
+        type: this.cardType,
+        createdBy: this.user
       }
-    } catch (_error) {
-      console.error(`Failed to load card router for type ${cardType}`);
-    }
-    return undefined;
+    };
+
+    await Promise.all([
+      kvBroadcast.broadcastSet(['cards', this.cardType, 'meta', cardId], meta),
+      kvBroadcast.broadcastSet(['cards', this.cardType, 'data', cardId], data)
+    ]);
+
+    return {
+      id: cardId,
+      name,
+      type: this.cardType,
+      created: now,
+      lastUpdated: now,
+      createdBy: this.user,
+      content: {},
+      metadata: {
+        version: '1.0.0',
+        permissions: {
+          canView: ['human', 'ai'],
+          canEdit: [this.user.id],
+          canDelete: [this.user.id]
+        }
+      }
+    };
   }
 
-  async handleRequest(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const match = url.pathname.match(/^\/cards\/([^\/]+)/);
-    if (!match) {
-      return new Response('Not Found', { status: 404 });
-    }
+  async deleteCard(cardId: string): Promise<void> {
+    await Promise.all([
+      kvBroadcast.broadcastDelete(['cards', this.cardType, 'meta', cardId]),
+      kvBroadcast.broadcastDelete(['cards', this.cardType, 'data', cardId])
+    ]);
+  }
 
-    const cardType = match[1];
-    let router = this.routers.get(cardType);
+  async getCard(cardId: string): Promise<BaseCard> {
+    const meta = await kv.get<KvCardMeta>(['cards', this.cardType, 'meta', cardId]);
+    if (!meta?.value) throw new Error('Card not found');
     
-    // Load router if not already loaded
-    if (!router) {
-      router = await this.loadCardRouter(cardType);
-      if (!router) {
-        return new Response('Card type not found', { status: 404 });
+    return {
+      id: meta.value.id,
+      name: meta.value.name,
+      type: meta.value.type,
+      created: meta.value.created,
+      lastUpdated: meta.value.lastUpdated,
+      createdBy: meta.value.createdBy,
+      content: {},
+      metadata: {
+        version: '1.0.0',
+        permissions: {
+          canView: ['human', 'ai'],
+          canEdit: [meta.value.createdBy.id],
+          canDelete: [meta.value.createdBy.id]
+        }
       }
-    }
-
-    // Handle template requests
-    if (url.pathname.endsWith('/template')) {
-      try {
-        const template = await this.loadCardTemplate(cardType);
-        return new Response(template, {
-          headers: { 'Content-Type': 'text/html' }
-        });
-      } catch (_error) {
-        return new Response('Template not found', { status: 404 });
-      }
-    }
-
-    return router.handleRequest(req);
+    };
   }
+
+  async getCards(): Promise<BaseCard[]> {
+    try {
+      const cards: BaseCard[] = [];
+      const iterator = kv.list<KvCardMeta>({ prefix: ['cards', this.cardType, 'meta'] });
+      
+      for await (const entry of iterator) {
+        if (entry.value) {
+          cards.push({
+            id: entry.value.id,
+            name: entry.value.name,
+            type: entry.value.type,
+            created: entry.value.created,
+            lastUpdated: entry.value.lastUpdated,
+            createdBy: entry.value.createdBy,
+            content: {},
+            metadata: {
+              version: '1.0.0',
+              permissions: {
+                canView: ['human', 'ai'],
+                canEdit: [entry.value.createdBy.id],
+                canDelete: [entry.value.createdBy.id]
+              }
+            }
+          });
+        }
+      }
+      
+      return cards;
+    } catch (error) {
+      console.error('Error getting cards:', error);
+      throw new Error(`Failed to get cards: ${error.message}`);
+    }
+  }
+
+  protected async addMessage(cardId: string, text: string): Promise<CardMessage> {
+    const message: CardMessage = {
+      id: crypto.randomUUID(),
+      cardId,
+      content: text,
+      timestamp: Date.now(),
+      author: this.user,
+      type: 'text'
+    };
+
+    const key: KvKey = ['cards', this.cardType, 'data', cardId];
+    const entry = await kv.get<KvCardData>(key);
+    if (!entry?.value) throw new Error('Card not found');
+
+    const messages = [...entry.value.messages, message];
+    const now = Date.now();
+
+    await kvBroadcast.broadcastSet(key, {
+      ...entry.value,
+      messages,
+      lastUpdated: now
+    });
+
+    return message;
+  }
+
+  protected async deleteMessage(cardId: string, messageId: string): Promise<void> {
+    const key: KvKey = ['cards', this.cardType, 'data', cardId];
+    const entry = await kv.get<KvCardData>(key);
+    if (!entry?.value) throw new Error('Card not found');
+
+    const messages = entry.value.messages.filter((m: CardMessage) => m.id !== messageId);
+    const now = Date.now();
+
+    await kvBroadcast.broadcastSet(key, {
+      ...entry.value,
+      messages,
+      lastUpdated: now
+    });
+  }
+
+  // Request Handling
+  abstract handleRequest(req: Request): Promise<Response>;
 } 

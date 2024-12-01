@@ -1,5 +1,5 @@
 import { BaseCardRouter } from '../cardRouter.ts';
-import type { CardMessage } from '../../../db/client/types.ts';
+import type { CardMessage, CardAuthor } from '../../../db/client/types.ts';
 import { kv } from '../../../db/core/kv.ts';
 import * as kvBroadcast from '../../ws/kvBroadcast.ts';
 
@@ -18,8 +18,8 @@ export interface CardData {
 }
 
 export class InfoCardRouter extends BaseCardRouter {
-  constructor(userId: string) {
-    super('info', userId);
+  constructor(userId: string, author: CardAuthor) {
+    super('info', userId, author);
   }
 
   async getCards(): Promise<InfoCardState[]> {
@@ -79,104 +79,143 @@ export class InfoCardRouter extends BaseCardRouter {
   }
 
   private async handleList(): Promise<Response> {
-    const cards = await this.getCards();
-    return new Response(JSON.stringify(cards), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  private async handleCreate(req: Request): Promise<Response> {
-    const { name } = await req.json();
-    const cardId = crypto.randomUUID();
-    const key = ['cards', 'info', 'data', cardId];
-    const now = Date.now();
-
-    const card: CardData = {
-      messages: [],
-      timestamp: now,
-      lastUpdated: now
-    };
-
-    await kvBroadcast.broadcastSet(key, card);
-    
-    return new Response(JSON.stringify({ 
-      id: cardId,
-      name,
-      messages: [],
-      created: now,
-      lastUpdated: now
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  private async handleDelete(req: Request): Promise<Response> {
-    const { cardId } = await req.json();
-    const key = ['cards', 'info', 'data', cardId];
-    await kvBroadcast.broadcastDelete(key);
-    
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  private async handleApiGet(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const cardId = url.searchParams.get('cardId');
-    
-    if (cardId) {
-      const key = ['cards', 'info', 'data', cardId];
-      const entry = await kv.get<CardData>(key);
-      return new Response(JSON.stringify(entry || { messages: [] }), {
+    try {
+      const cards = await this.getCards();
+      return new Response(JSON.stringify(cards), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  }
 
-    return this.handleList();
+  private async handleCreate(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      if (!data.name) {
+        return new Response(JSON.stringify({ error: 'Name is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const card = await this.createCard(data.name);
+      return new Response(JSON.stringify(card), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  private async handleDelete(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      if (!data.cardId) {
+        return new Response(JSON.stringify({ error: 'Card ID is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await this.deleteCard(data.cardId);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  private async handleApiGet(req: Request): Promise<Response> {
+    try {
+      const url = new URL(req.url);
+      const cardId = url.searchParams.get('cardId');
+      if (!cardId) {
+        return new Response(JSON.stringify({ error: 'Card ID is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const card = await this.getCard(cardId);
+      return new Response(JSON.stringify(card), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 
   private async handleMessageAdd(req: Request): Promise<Response> {
-    const { cardId, text } = await req.json();
-    const message: CardMessage = {
-      id: crypto.randomUUID(),
-      text,
-      timestamp: Date.now()
-    };
+    try {
+      const data = await req.json();
+      if (!data.cardId || !data.text) {
+        return new Response(JSON.stringify({ error: 'Card ID and text are required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
 
-    const key = ['cards', 'info', 'data', cardId];
-    const entry = await kv.get<CardData>(key);
-    const messages = entry?.messages || [];
-    messages.push(message);
-
-    await kvBroadcast.broadcastSet(key, { 
-      messages, 
-      timestamp: Date.now(),
-      lastUpdated: Date.now()
-    });
-
-    return new Response(JSON.stringify(message), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+      const message = await this.addMessage(data.cardId, data.text);
+      return new Response(JSON.stringify(message), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 
   private async handleMessageDelete(req: Request): Promise<Response> {
-    const { cardId, messageId } = await req.json();
-    const key = ['cards', 'info', 'data', cardId];
-    const entry = await kv.get<CardData>(key);
-    if (!entry) {
-      return new Response('Card not found', { status: 404 });
-    }
+    try {
+      const data = await req.json();
+      if (!data.cardId || !data.messageId) {
+        return new Response(JSON.stringify({ error: 'Card ID and message ID are required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
 
-    const messages = entry.messages.filter((m: CardMessage) => m.id !== messageId);
-    await kvBroadcast.broadcastSet(key, { 
-      messages, 
-      timestamp: Date.now(),
-      lastUpdated: Date.now()
-    });
-    
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+      const key: KvKey = ['cards', this.cardType, 'data', data.cardId];
+      const entry = await kv.get<CardData>(key);
+      if (!entry?.value) {
+        return new Response(JSON.stringify({ error: 'Card not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const messages = entry.value.messages.filter(m => m.id !== data.messageId);
+      await kvBroadcast.broadcastSet(key, {
+        ...entry.value,
+        messages,
+        lastUpdated: Date.now()
+      });
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 }
 

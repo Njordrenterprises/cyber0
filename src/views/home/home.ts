@@ -1,14 +1,6 @@
 import { getClientScript } from '../../../db/client/index.ts';
 import { getUserWidgetScript } from '../../widgets/user/user.ts';
-
-interface User {
-  id: string;
-  username: string;
-  color: string;
-  sprite: string;
-  created: number;
-  lastSeen: number;
-}
+import type { User } from '../../services/user-service.ts';
 
 export async function layout(user: User): Promise<string> {
   const template = await Deno.readTextFile(new URL('./home.html', import.meta.url));
@@ -29,8 +21,8 @@ export async function layout(user: User): Promise<string> {
     <link rel="stylesheet" href="/src/cards/cards.css">
     <script>
       // Initialize cardData and user context
-      window.cardData = window.cardData || {};
-      window.userContext = ${JSON.stringify(user)};
+      globalThis.cardData = globalThis.cardData || {};
+      globalThis.userContext = ${JSON.stringify(user)};
 
       // Initialize user widget
       ${getUserWidgetScript()}

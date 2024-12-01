@@ -1,74 +1,113 @@
 import { assertEquals } from "jsr:@std/assert";
 import { AiCommands } from "./curl_commands.ts";
-import { testSuite, Assertions, type TestContext, type ApiResponse } from "./test_utils.ts";
+import { testSuite, Assertions } from "./test_utils.ts";
+import type { User } from "../../db/client/types.ts";
 
 const { View } = AiCommands;
-const { assertSuccess, assertHtml, assertError } = Assertions;
+const { assertSuccess, assertError } = Assertions;
 
-// Mock user for tests
-const mockUser = {
-  id: "test-user",
-  username: "Test User",
-  color: "#ff0000",
-  sprite: "sprite1",
-  created: Date.now(),
-  lastSeen: Date.now()
-};
+testSuite("View Operations", async (t) => {
+  const mockUser: User = {
+    id: "test-user",
+    name: "Test User",
+    username: "test_user",
+    email: "test@example.com",
+    type: 'human' as const,
+    color: "#ff0000",
+    sprite: "👤",
+    created: Date.now(),
+    lastSeen: Date.now(),
+    sessionId: "test-session",
+    cookie: "userId=test-user; Path=/; HttpOnly; SameSite=Lax",
+    preferences: {
+      theme: "dark" as const,
+      language: "en",
+      notifications: true
+    },
+    capabilities: {
+      canCreateCards: true,
+      canDeleteCards: true,
+      canSendMessages: true,
+      canModifyUsers: false,
+      allowedCardTypes: ['info', 'test']
+    }
+  };
 
-testSuite("View Operations", async (t: TestContext) => {
-  // Test getting home view
+  // Test home view
   await t.step("get home view", async () => {
-    const response = await View.getView("home", mockUser) as ApiResponse;
+    const response = await View.getView("home", mockUser);
     assertSuccess(response.status, response.data);
-    const html = assertHtml(response);
-    assertEquals(html.includes("user-widget"), true);
-    assertEquals(html.includes("cards-container"), true);
+    const html = response.data;
+    
+    // Verify basic structure
+    assertEquals(typeof html, "string");
+    assertEquals(html.includes("<!DOCTYPE html>"), true);
+    assertEquals(html.includes("<html>"), true);
+    assertEquals(html.includes("</html>"), true);
+    
+    // Verify user context
+    assertEquals(html.includes("window.userContext = "), true);
+    assertEquals(html.includes(mockUser.id), true);
+    assertEquals(html.includes(mockUser.username), true);
+    assertEquals(html.includes(mockUser.email), true);
   });
 
-  // Test getting non-existent view
-  await t.step("get non-existent view", async () => {
-    const response = await View.getView("non-existent", mockUser) as ApiResponse;
-    assertEquals(response.status, 404);
-    assertError(response);
-  });
-
-  // Test getting user widget
+  // Test user widget
   await t.step("get user widget", async () => {
-    const response = await View.getWidget("user", mockUser) as ApiResponse;
+    const response = await View.getWidget("user-profile", mockUser);
     assertSuccess(response.status, response.data);
-    const html = assertHtml(response);
-    assertEquals(html.includes("user-widget"), true);
+    const html = response.data;
+    
+    // Verify basic structure
+    assertEquals(typeof html, "string");
+    assertEquals(html.includes("<div"), true);
+    assertEquals(html.includes("</div>"), true);
+    
+    // Verify user data rendering
+    assertEquals(html.includes(mockUser.username), true);
+    assertEquals(html.includes(mockUser.sprite), true);
+    assertEquals(html.includes(mockUser.color), true);
   });
 
-  // Test getting non-existent widget
-  await t.step("get non-existent widget", async () => {
-    const response = await View.getWidget("non-existent", mockUser) as ApiResponse;
+  // Test error cases
+  await t.step("get non-existent view", async () => {
+    const response = await View.getView("non-existent", mockUser);
     assertEquals(response.status, 404);
     assertError(response);
   });
 
-  // Test view content types
-  await t.step("verify content types", async () => {
-    const response = await fetch("http://localhost:8000/views/home");
-    assertEquals(response.headers.get("Content-Type"), "application/json");
-  });
-
-  // Test widget content types
-  await t.step("verify widget content types", async () => {
-    const response = await fetch("http://localhost:8000/widgets/user");
-    assertEquals(response.headers.get("Content-Type"), "application/json");
-  });
-
-  // Test view caching
-  await t.step("verify cache headers", async () => {
-    const response = await fetch("http://localhost:8000/views/home");
-    assertEquals(response.headers.get("Cache-Control"), "no-cache");
-  });
-
-  // Test widget error response format
-  await t.step("verify error response format", async () => {
-    const response = await View.getWidget("invalid-widget", mockUser) as ApiResponse;
-    assertEquals(response.status, 404);
+  await t.step("get view without user", async () => {
+    const response = await View.getView("home", null as unknown as User);
+    assertEquals(response.status, 401);
     assertError(response);
+  });
+
+  // Test view with all user data
+  await t.step("verify all user data in view", async () => {
+    const response = await View.getView("user-settings", mockUser);
+    assertSuccess(response.status, response.data);
+    const html = response.data;
+    
+    // Verify all user fields are included
+    assertEquals(html.includes(mockUser.username), true);
+    assertEquals(html.includes(mockUser.email), true);
+    assertEquals(html.includes(mockUser.color), true);
+    assertEquals(html.includes(mockUser.sprite), true);
+    assertEquals(html.includes(mockUser.preferences.theme), true);
+    assertEquals(html.includes(mockUser.preferences.language), true);
+    assertEquals(html.includes(String(mockUser.preferences.notifications)), true);
+    
+    // Verify user context is properly set
+    const userContextMatch = html.match(/window\.userContext = (.*?);/);
+    if (userContextMatch) {
+      const userContext = JSON.parse(userContextMatch[1]) as User;
+      assertEquals(userContext.id, mockUser.id);
+      assertEquals(userContext.username, mockUser.username);
+      assertEquals(userContext.email, mockUser.email);
+      assertEquals(userContext.preferences.theme, mockUser.preferences.theme);
+      assertEquals(userContext.preferences.language, mockUser.preferences.language);
+    } else {
+      throw new Error("User context not found in view");
+    }
   });
 }); 

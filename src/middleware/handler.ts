@@ -1,16 +1,15 @@
+import type { User } from '../services/user-service.ts';
+
 export interface MiddlewareContext {
-  user: {
-    id: string;
-    username: string;
-  };
+  user: User;
   cookieResponse?: Response;
 }
 
 export class MiddlewareHandler {
-  private user: UserIdentity;
+  private user: User;
   private cookieResponse: Response | null;
 
-  constructor({ user, cookieResponse }: { user: UserIdentity; cookieResponse: Response | null }) {
+  constructor({ user, cookieResponse }: { user: User; cookieResponse: Response | null }) {
     this.user = user;
     this.cookieResponse = cookieResponse;
   }
@@ -22,7 +21,11 @@ export class MiddlewareHandler {
       const userData = req.headers.get('X-User-Data');
 
       if (userId && userData) {
-        this.user = JSON.parse(userData);
+        const parsedUser = JSON.parse(userData) as User;
+        // Validate required user fields
+        if (parsedUser.id && parsedUser.username && parsedUser.email) {
+          this.user = parsedUser;
+        }
       }
 
       // Call the next handler

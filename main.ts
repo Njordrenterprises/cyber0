@@ -1,5 +1,5 @@
 import { serveDir } from "https://deno.land/std@0.220.1/http/file_server.ts";
-import { CardRouter } from "./src/cards/cardRouter.ts";
+import { CardManager } from "./src/cards/cardManager.ts";
 import { ViewRouter } from "./src/views/viewRouter.ts";
 import { DbRouter } from "./db/router.ts";
 import { MiddlewareHandler } from "./src/middleware/handler.ts";
@@ -136,15 +136,15 @@ async function handler(req: Request): Promise<Response> {
   console.log('User:', user);
 
   // Initialize routers and middleware
-  const middleware = new MiddlewareHandler({ user, cookieResponse });
-  const cardRouter = new CardRouter(user.id);
+  const middleware = new MiddlewareHandler({ user, cookieResponse: cookieResponse || null });
+  const cardManager = new CardManager(user);
   const viewRouter = new ViewRouter({ user });
   const dbRouter = new DbRouter({ user });
 
   return middleware.handleRequest(req, async (req) => {
     // Handle card routes
     if (url.pathname.startsWith('/cards/')) {
-      return cardRouter.handleRequest(req);
+      return cardManager.handleRequest(req);
     }
 
     // Handle view and widget routes
