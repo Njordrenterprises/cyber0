@@ -5,7 +5,7 @@ import {
   NestedCard,
   CardOperations
 } from '../../db/client/types.ts';
-import { kv } from '../../db/core/kv.ts';
+import { kv, KvKey } from '../../db/core/kv.ts';
 
 /**
  * Base router class for handling card operations.
@@ -18,6 +18,10 @@ export class BaseCardRouter implements CardOperations {
   constructor(cardType: string, user: CardAuthor) {
     this.cardType = cardType;
     this.user = user;
+  }
+
+  protected getCardKey(cardId: string): KvKey {
+    return ['cards', this.cardType, 'data', cardId].map(String);
   }
 
   /**
@@ -43,11 +47,12 @@ export class BaseCardRouter implements CardOperations {
           canView: ['human', 'ai'],
           canEdit: [this.user.id],
           canDelete: [this.user.id]
-        }
+        },
+        nestedCards: []
       }
     };
 
-    const key = ['cards', this.cardType, 'data', cardId];
+    const key = this.getCardKey(cardId);
     await kv.set(key, card);
 
     return card;
@@ -61,12 +66,13 @@ export class BaseCardRouter implements CardOperations {
   protected async createCardWithContent(data: { name: string; content?: unknown }): Promise<BaseCard> {
     const card = await this.createCard(data.name);
     if (data.content) {
-      const key = ['cards', this.cardType, 'data', card.id];
+      const key = this.getCardKey(card.id);
       const entry = await kv.get<BaseCard>(key);
       if (entry?.value) {
         const updatedCard = {
           ...entry.value,
-          content: data.content
+          content: data.content,
+          lastUpdated: Date.now()
         };
         await kv.set(key, updatedCard);
         return updatedCard;
@@ -76,23 +82,35 @@ export class BaseCardRouter implements CardOperations {
   }
 
   /**
-   * Deletes a card by ID.
-   * @param cardId The ID of the card to delete
+   * Updates a card with new data.
+   * @param cardId The ID of the card to update
+   * @param data The new card data
+   * @returns The updated card
    * @throws Error if card not found or permission denied
    */
-  async deleteCard(cardId: string): Promise<void> {
-    const key = ['cards', this.cardType, 'data', cardId];
+  protected async updateCard(cardId: string, data: { content?: unknown }): Promise<BaseCard> {
+    const key = this.getCardKey(cardId);
     const entry = await kv.get<BaseCard>(key);
-    
+
     if (!entry?.value) {
       throw new Error('Card not found');
     }
 
-    if (!entry.value.metadata.permissions.canDelete.includes(this.user.id)) {
+    if (!entry.value.metadata.permissions.canEdit.includes(this.user.id)) {
       throw new Error('Permission denied');
     }
 
-    await kv.delete(key);
+    const updatedCard = {
+      ...entry.value,
+      content: {
+        ...entry.value.content,
+        ...data.content
+      },
+      lastUpdated: Date.now()
+    };
+
+    await kv.set(key, updatedCard);
+    return updatedCard;
   }
 
   /**
@@ -102,7 +120,7 @@ export class BaseCardRouter implements CardOperations {
    * @throws Error if card not found or permission denied
    */
   async getCard(cardId: string): Promise<BaseCard> {
-    const key = ['cards', this.cardType, 'data', cardId];
+    const key = this.getCardKey(cardId);
     const entry = await kv.get<BaseCard>(key);
 
     if (!entry?.value) {
@@ -122,7 +140,8 @@ export class BaseCardRouter implements CardOperations {
    */
   async getCards(): Promise<BaseCard[]> {
     const cards: BaseCard[] = [];
-    const iter = kv.list<BaseCard>({ prefix: ['cards', this.cardType, 'data'] });
+    const prefix = ['cards', this.cardType, 'data'].map(String);
+    const iter = kv.list<BaseCard>({ prefix });
 
     for await (const entry of iter) {
       if (entry.value && entry.value.metadata.permissions.canView.includes(this.user.type)) {
@@ -134,6 +153,26 @@ export class BaseCardRouter implements CardOperations {
   }
 
   /**
+   * Deletes a card by ID.
+   * @param cardId The ID of the card to delete
+   * @throws Error if card not found or permission denied
+   */
+  async deleteCard(cardId: string): Promise<void> {
+    const key = this.getCardKey(cardId);
+    const entry = await kv.get<BaseCard>(key);
+
+    if (!entry?.value) {
+      throw new Error('Card not found');
+    }
+
+    if (!entry.value.metadata.permissions.canDelete.includes(this.user.id)) {
+      throw new Error('Permission denied');
+    }
+
+    await kv.delete(key);
+  }
+
+  /**
    * Attaches a card as a nested card to a parent card.
    * @param parentId The ID of the parent card
    * @param childId The ID of the child card to attach
@@ -141,10 +180,8 @@ export class BaseCardRouter implements CardOperations {
    * @throws Error if cards not found or permission denied
    */
   async attachCard(parentId: string, childId: string, relationship: CardRelationship): Promise<void> {
-    const [parentKey, childKey] = [
-      ['cards', this.cardType, 'data', parentId],
-      ['cards', this.cardType, 'data', childId]
-    ];
+    const parentKey = this.getCardKey(parentId);
+    const childKey = this.getCardKey(childId);
 
     const [parentEntry, childEntry] = await Promise.all([
       kv.get<BaseCard>(parentKey),
@@ -204,10 +241,8 @@ export class BaseCardRouter implements CardOperations {
    * @throws Error if cards not found or permission denied
    */
   async detachCard(parentId: string, childId: string): Promise<void> {
-    const [parentKey, childKey] = [
-      ['cards', this.cardType, 'data', parentId],
-      ['cards', this.cardType, 'data', childId]
-    ];
+    const parentKey = this.getCardKey(parentId);
+    const childKey = this.getCardKey(childId);
 
     const [parentEntry, childEntry] = await Promise.all([
       kv.get<BaseCard>(parentKey),
@@ -256,9 +291,9 @@ export class BaseCardRouter implements CardOperations {
    */
   async moveCard(cardId: string, fromParentId: string, toParentId: string): Promise<void> {
     const [cardKey, fromKey, toKey] = [
-      ['cards', this.cardType, 'data', cardId],
-      ['cards', this.cardType, 'data', fromParentId],
-      ['cards', this.cardType, 'data', toParentId]
+      this.getCardKey(cardId),
+      this.getCardKey(fromParentId),
+      this.getCardKey(toParentId)
     ];
 
     const [cardEntry, fromEntry, toEntry] = await Promise.all([
@@ -302,11 +337,7 @@ export class BaseCardRouter implements CardOperations {
         ...toEntry.value.metadata,
         nestedCards: [
           ...(toEntry.value.metadata.nestedCards || []),
-          {
-            ...nestedCard,
-            addedAt: Date.now(),
-            addedBy: this.user
-          }
+          nestedCard
         ]
       }
     };
@@ -332,14 +363,14 @@ export class BaseCardRouter implements CardOperations {
   }
 
   /**
-   * Reorders a nested card within its parent's nested cards list.
+   * Reorders a nested card within its parent.
    * @param parentId The ID of the parent card
    * @param cardId The ID of the card to reorder
-   * @param newPosition The new position index for the card
+   * @param newPosition The new position for the card
    * @throws Error if cards not found or permission denied
    */
   async reorderCard(parentId: string, cardId: string, newPosition: number): Promise<void> {
-    const parentKey = ['cards', this.cardType, 'data', parentId];
+    const parentKey = this.getCardKey(parentId);
     const parentEntry = await kv.get<BaseCard>(parentKey);
 
     if (!parentEntry?.value) {
@@ -354,29 +385,18 @@ export class BaseCardRouter implements CardOperations {
     const cardIndex = nestedCards.findIndex(nested => nested.id === cardId);
 
     if (cardIndex === -1) {
-      throw new Error('Card is not nested in the parent');
+      throw new Error('Card not found in parent');
     }
 
-    // Remove card from current position
-    const [removedCard] = nestedCards.splice(cardIndex, 1);
-    // Insert at new position
-    nestedCards.splice(newPosition, 0, {
-      ...removedCard,
-      position: newPosition
-    });
-
-    // Update positions for all cards
-    const updatedNestedCards = nestedCards.map((nested, index) => ({
-      ...nested,
-      position: index
-    }));
+    const [card] = nestedCards.splice(cardIndex, 1);
+    nestedCards.splice(newPosition, 0, card);
 
     const updatedParent = {
       ...parentEntry.value,
       lastUpdated: Date.now(),
       metadata: {
         ...parentEntry.value.metadata,
-        nestedCards: updatedNestedCards
+        nestedCards
       }
     };
 
@@ -433,6 +453,26 @@ export class BaseCardRouter implements CardOperations {
       const url = new URL(req.url);
       const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
 
+      // Extract user from query parameters for GET requests
+      if (req.method === 'GET') {
+        const userParam = url.searchParams.get('user');
+        if (userParam) {
+          try {
+            this.user = JSON.parse(decodeURIComponent(userParam));
+          } catch (error) {
+            console.error('Error parsing user from query parameters:', error);
+          }
+        }
+      }
+      // Extract user from request body for POST/PUT requests
+      else if (req.method === 'POST' || req.method === 'PUT') {
+        const clonedReq = req.clone();
+        const data = await clonedReq.json();
+        if (data.user) {
+          this.user = data.user;
+        }
+      }
+
       // Handle nested card operations
       if (path.startsWith('nested/')) {
         return await this.handleNestedOperation(req);
@@ -441,44 +481,12 @@ export class BaseCardRouter implements CardOperations {
       // Handle core operations
       return await this.handleCoreOperation(req, path);
     } catch (error) {
-      return this.handleError(error);
+      console.error('Error handling request:', error);
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }), {
+        status: error instanceof Error && error.message === 'Card not found' ? 404 : 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
-  }
-
-  /**
-   * Handles nested card operations.
-   * @param req The incoming HTTP request
-   * @returns HTTP response
-   */
-  protected async handleNestedOperation(req: Request): Promise<Response> {
-    const path = new URL(req.url).pathname;
-    const operation = path.split('/').pop();
-    const data = await req.json();
-
-    switch (operation) {
-      case 'attach':
-        await this.attachCard(data.parentId, data.childId, data.relationship);
-        break;
-      case 'detach':
-        await this.detachCard(data.parentId, data.childId);
-        break;
-      case 'move':
-        await this.moveCard(data.cardId, data.fromParentId, data.toParentId);
-        break;
-      case 'reorder':
-        await this.reorderCard(data.parentId, data.cardId, data.newPosition);
-        break;
-      default:
-        return new Response(JSON.stringify({ error: 'Invalid operation' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-    }
-
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    });
   }
 
   /**
@@ -488,70 +496,291 @@ export class BaseCardRouter implements CardOperations {
    * @returns HTTP response
    */
   protected async handleCoreOperation(req: Request, path: string): Promise<Response> {
-    switch (req.method) {
-      case 'GET':
-        if (path === '') {
-          const cards = await this.getCards();
-          return new Response(JSON.stringify(cards), {
+    try {
+      switch (req.method) {
+        case 'GET':
+          if (path === '') {
+            return new Response(JSON.stringify(await this.getCards()), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify(await this.getCard(path)), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
-        } else {
-          const card = await this.getCard(path);
-          return new Response(JSON.stringify(card), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
-      case 'POST':
-        if (path === '') {
+
+        case 'POST':
           const data = await req.json();
           const card = await this.createCardWithContent(data);
           return new Response(JSON.stringify(card), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           });
-        }
-        break;
-      case 'DELETE':
-        await this.deleteCard(path);
-        return new Response(JSON.stringify({ success: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      default:
-        return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-          status: 405,
-          headers: { 'Content-Type': 'application/json' }
-        });
-    }
 
-    return new Response(JSON.stringify({ error: 'Not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
+        case 'PUT':
+          const updateData = await req.json();
+          const cardId = path;
+          const updatedCard = await this.updateCard(cardId, updateData);
+          return new Response(JSON.stringify(updatedCard), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
 
-  /**
-   * Handles errors and converts them to appropriate HTTP responses.
-   * @param error The error to handle
-   * @returns HTTP response
-   */
-  protected handleError(error: unknown): Response {
-    console.error('Error handling request:', error);
-    
-    if (error instanceof Error) {
-      const status = error.message.includes('not found') ? 404 :
-                    error.message.includes('denied') ? 403 : 500;
-      return new Response(JSON.stringify({ error: error.message }), {
-        status,
+        case 'DELETE':
+          await this.deleteCard(path);
+          return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+
+        default:
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+      }
+    } catch (error) {
+      console.error('Error handling core operation:', error);
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }), {
+        status: error instanceof Error && error.message === 'Card not found' ? 404 : 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
+  }
 
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+  /**
+   * Handles nested card operations.
+   * @param req The incoming HTTP request
+   * @returns HTTP response
+   */
+  protected async handleNestedOperation(req: Request): Promise<Response> {
+    try {
+      const path = new URL(req.url).pathname;
+      const operation = path.split('/').pop();
+
+      switch (operation) {
+        case 'attach':
+          return await this.handleAttachCard(req);
+        case 'detach':
+          return await this.handleDetachCard(req);
+        case 'move':
+          return await this.handleMoveCard(req);
+        case 'reorder':
+          return await this.handleReorderCard(req);
+        case 'nested':
+          const cardId = path.split('/')[path.split('/').length - 2];
+          return await this.handleGetNestedCards(cardId, req);
+        default:
+          return new Response(JSON.stringify({ error: 'Invalid operation' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+      }
+    } catch (error) {
+      console.error('Error handling nested operation:', error);
+      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Internal server error' }), {
+        status: error instanceof Error && error.message === 'Card not found' ? 404 : 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  /**
+   * Handles attaching a card to a parent.
+   * @param req The incoming HTTP request
+   * @returns HTTP response
+   */
+  protected async handleAttachCard(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      const { parentId, childId, relationship, user } = data;
+
+      if (user) {
+        this.user = user;
+      }
+
+      if (!parentId || !childId || !relationship) {
+        return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await this.attachCard(parentId, childId, relationship as CardRelationship);
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Parent or child card not found') {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      console.error('Error attaching card:', error);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  /**
+   * Handles detaching a card from its parent.
+   * @param req The incoming HTTP request
+   * @returns HTTP response
+   */
+  protected async handleDetachCard(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      const { parentId, childId, user } = data;
+
+      if (user) {
+        this.user = user;
+      }
+
+      if (!parentId || !childId) {
+        return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await this.detachCard(parentId, childId);
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Parent or child card not found') {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      console.error('Error detaching card:', error);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  /**
+   * Handles moving a card to a new parent.
+   * @param req The incoming HTTP request
+   * @returns HTTP response
+   */
+  protected async handleMoveCard(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      const { cardId, fromParentId, toParentId, user } = data;
+
+      if (user) {
+        this.user = user;
+      }
+
+      if (!cardId || !fromParentId || !toParentId) {
+        return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await this.moveCard(cardId, fromParentId, toParentId);
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Card not found') {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      console.error('Error moving card:', error);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  /**
+   * Handles reordering a card within its parent.
+   * @param req The incoming HTTP request
+   * @returns HTTP response
+   */
+  protected async handleReorderCard(req: Request): Promise<Response> {
+    try {
+      const data = await req.json();
+      const { parentId, cardId, newPosition, user } = data;
+
+      if (user) {
+        this.user = user;
+      }
+
+      if (!parentId || !cardId || typeof newPosition !== 'number') {
+        return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      await this.reorderCard(parentId, cardId, newPosition);
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Card not found') {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      console.error('Error reordering card:', error);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  }
+
+  /**
+   * Handles getting nested cards for a parent.
+   * @param cardId The ID of the parent card
+   * @param req The incoming HTTP request
+   * @returns HTTP response
+   */
+  protected async handleGetNestedCards(cardId: string, req: Request): Promise<Response> {
+    try {
+      const card = await this.getCard(cardId);
+      const nestedCards = card.metadata.nestedCards || [];
+
+      return new Response(JSON.stringify(nestedCards), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Card not found') {
+        return new Response(JSON.stringify({ error: error.message }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      console.error('Error getting nested cards:', error);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
 } 
