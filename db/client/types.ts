@@ -216,25 +216,17 @@ export interface CardAPI {
   // Core operations
   create(definition: CardDefinition): Promise<BaseCard>;
   delete(cardId: string): Promise<boolean>;
-  update(cardId: string, content: unknown): Promise<BaseCard>;
-  
-  // Message handling
-  sendMessage(cardId: string, message: Partial<CardMessage>): Promise<CardMessage>;
-  getMessages(cardId: string, options?: { limit?: number; before?: number }): Promise<CardMessage[]>;
-  
-  // Command handling
-  executeCommand(command: CardCommand): Promise<CardResponse>;
-  
-  // Event handling
-  subscribe(cardId: string, handler: (event: CardEvent) => void): () => void;
-  unsubscribe(cardId: string): void;
-  
-  // Metadata
-  getDefinition(cardType: string): Promise<CardDefinition>;
-  getCapabilities(cardId: string): Promise<CardDefinition['capabilities']>;
-  
-  // Utility
-  validateSchema(cardType: string, content: unknown): Promise<boolean>;
+  update(cardId: string, data: Record<string, unknown>): Promise<boolean>;
+  get(cardId: string): Promise<BaseCard>;
+  list(): Promise<BaseCard[]>;
+
+  // Message operations
+  message(cardId: string, text: string): Promise<CardMessage>;
+  messages(cardId: string): Promise<CardMessage[]>;
+  deleteMessage(cardId: string, messageId: string): Promise<boolean>;
+
+  // Plugin operations
+  plugin<T>(action: string, ...args: unknown[]): Promise<T>;
 }
 
 // Plugin System Types
@@ -313,4 +305,114 @@ export interface Session {
   expires: number;
   cookie: string;
   data?: Record<string, unknown>;
+}
+
+export interface Message {
+  id: string;
+  content: string;
+  author: CardAuthor;
+  timestamp: number;
+  type: MessageType;
+  metadata?: MessageMetadata;
+  parentId?: string;  // For threaded messages
+  reactions?: MessageReaction[];
+  attachments?: MessageAttachment[];
+  mentions?: string[]; // User IDs that are mentioned
+  edited?: boolean;
+  editHistory?: MessageEdit[];
+}
+
+export type MessageType = 'text' | 'system' | 'action' | 'error' | 'ai' | 'human';
+
+export interface MessageMetadata {
+  version: string;
+  schema?: string;
+  context?: Record<string, unknown>;
+  tags?: string[];
+  visibility?: 'public' | 'private' | 'group';
+  expiresAt?: number;
+  importance?: 'low' | 'normal' | 'high' | 'urgent';
+  status?: 'sent' | 'delivered' | 'read' | 'error';
+}
+
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  users: string[]; // User IDs who reacted
+}
+
+export interface MessageAttachment {
+  id: string;
+  type: 'image' | 'video' | 'audio' | 'file' | 'link';
+  url: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MessageEdit {
+  timestamp: number;
+  content: string;
+  editor: CardAuthor;
+}
+
+export interface MessageThread {
+  id: string;
+  parentId: string;
+  messages: Message[];
+  metadata: MessageMetadata;
+  participants: CardAuthor[];
+  lastActivity: number;
+}
+
+export interface MessageState {
+  messages: Message[];
+  threads: MessageThread[];
+  metadata: {
+    version: string;
+    schema?: string;
+    messageCount: number;
+    threadCount: number;
+    lastMessageTime: number;
+    permissions: {
+      canSend: string[];
+      canEdit: string[];
+      canDelete: string[];
+      canReact: string[];
+    };
+  };
+}
+
+// Message operations interface
+export interface MessageOperations {
+  sendMessage(content: string, options?: {
+    type?: MessageType;
+    parentId?: string;
+    metadata?: MessageMetadata;
+    attachments?: MessageAttachment[];
+  }): Promise<Message>;
+  
+  editMessage(messageId: string, content: string): Promise<Message>;
+  deleteMessage(messageId: string): Promise<void>;
+  
+  addReaction(messageId: string, emoji: string): Promise<void>;
+  removeReaction(messageId: string, emoji: string): Promise<void>;
+  
+  createThread(parentId: string, content: string): Promise<MessageThread>;
+  replyInThread(threadId: string, content: string): Promise<Message>;
+  
+  getMessages(options?: {
+    limit?: number;
+    before?: number;
+    after?: number;
+    type?: MessageType[];
+    threadId?: string;
+  }): Promise<Message[]>;
+  
+  getThread(threadId: string): Promise<MessageThread>;
+  
+  markAsRead(messageIds: string[]): Promise<void>;
+  pin(messageId: string): Promise<void>;
+  unpin(messageId: string): Promise<void>;
 } 

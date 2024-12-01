@@ -1,0 +1,284 @@
+<div class="message-card" x-data="messageCard" x-init="init">
+  <!-- Message Input -->
+  <div class="message-input">
+    <textarea 
+      x-model="newMessage" 
+      @keydown.enter.prevent="sendMessage"
+      placeholder="Type a message..."
+    ></textarea>
+    <div class="message-actions">
+      <button @click="showAttachMenu = !showAttachMenu">
+        <i class="fas fa-paperclip"></i>
+      </button>
+      <button @click="sendMessage">Send</button>
+    </div>
+    
+    <!-- Attachment Menu -->
+    <div x-show="showAttachMenu" class="attach-menu">
+      <button @click="attachFile('image')">Image</button>
+      <button @click="attachFile('video')">Video</button>
+      <button @click="attachFile('audio')">Audio</button>
+      <button @click="attachFile('file')">File</button>
+      <button @click="attachFile('link')">Link</button>
+    </div>
+  </div>
+
+  <!-- Message List -->
+  <div class="message-list" x-ref="messageList">
+    <template x-for="message in messages" :key="message.id">
+      <div 
+        class="message" 
+        :class="{
+          'system': message.type === 'system',
+          'error': message.type === 'error',
+          'ai': message.type === 'ai',
+          'human': message.type === 'human',
+          'thread': message.parentId
+        }"
+      >
+        <!-- Message Header -->
+        <div class="message-header">
+          <div class="author">
+            <span class="sprite" x-text="message.author.sprite"></span>
+            <span class="name" x-text="message.author.username"></span>
+          </div>
+          <div class="timestamp" x-text="formatTime(message.timestamp)"></div>
+        </div>
+
+        <!-- Message Content -->
+        <div class="message-content" x-text="message.content"></div>
+
+        <!-- Attachments -->
+        <template x-if="message.attachments?.length">
+          <div class="attachments">
+            <template x-for="attachment in message.attachments" :key="attachment.id">
+              <div class="attachment" :class="attachment.type">
+                <template x-if="attachment.type === 'image'">
+                  <img :src="attachment.url" :alt="attachment.name">
+                </template>
+                <template x-if="attachment.type === 'video'">
+                  <video controls :src="attachment.url"></video>
+                </template>
+                <template x-if="attachment.type === 'audio'">
+                  <audio controls :src="attachment.url"></audio>
+                </template>
+                <template x-if="attachment.type === 'file' || attachment.type === 'link'">
+                  <a :href="attachment.url" target="_blank" x-text="attachment.name"></a>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- Reactions -->
+        <div class="reactions">
+          <template x-for="reaction in message.reactions" :key="reaction.emoji">
+            <button 
+              class="reaction" 
+              :class="{ active: reaction.users.includes(userId) }"
+              @click="toggleReaction(message.id, reaction.emoji)"
+            >
+              <span x-text="reaction.emoji"></span>
+              <span x-text="reaction.count"></span>
+            </button>
+          </template>
+          <button @click="showEmojiPicker = !showEmojiPicker" class="add-reaction">
+            <i class="fas fa-smile"></i>
+          </button>
+        </div>
+
+        <!-- Thread Preview -->
+        <template x-if="message.parentId">
+          <div class="thread-preview">
+            <i class="fas fa-reply"></i>
+            <span>Reply in thread</span>
+          </div>
+        </template>
+
+        <!-- Message Actions -->
+        <div class="message-actions">
+          <button @click="startThread(message.id)">
+            <i class="fas fa-reply"></i>
+          </button>
+          <template x-if="canEdit(message)">
+            <button @click="editMessage(message)">
+              <i class="fas fa-edit"></i>
+            </button>
+          </template>
+          <template x-if="canDelete(message)">
+            <button @click="deleteMessage(message.id)">
+              <i class="fas fa-trash"></i>
+            </button>
+          </template>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Thread View -->
+  <div x-show="activeThread" class="thread-view">
+    <div class="thread-header">
+      <button @click="closeThread">
+        <i class="fas fa-times"></i>
+      </button>
+      <h3>Thread</h3>
+    </div>
+    <div class="thread-messages">
+      <template x-for="message in threadMessages" :key="message.id">
+        <!-- Similar message template as above -->
+      </template>
+    </div>
+    <div class="thread-input">
+      <textarea 
+        x-model="threadReply" 
+        @keydown.enter.prevent="sendThreadReply"
+        placeholder="Reply in thread..."
+      ></textarea>
+      <button @click="sendThreadReply">Reply</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.message-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--card-bg);
+  border-radius: var(--card-radius);
+  overflow: hidden;
+}
+
+.message-input {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+}
+
+.message-input textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  resize: vertical;
+}
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.message {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background: var(--message-bg);
+}
+
+.message.system { background: var(--system-msg-bg); }
+.message.error { background: var(--error-msg-bg); }
+.message.ai { background: var(--ai-msg-bg); }
+.message.human { background: var(--human-msg-bg); }
+.message.thread { margin-left: 2rem; }
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.author {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sprite {
+  font-size: 1.2rem;
+}
+
+.timestamp {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.message-content {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.attachments {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.5rem;
+}
+
+.reactions {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reaction {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 1rem;
+  background: var(--reaction-bg);
+  border: none;
+  cursor: pointer;
+}
+
+.reaction.active {
+  background: var(--reaction-active-bg);
+}
+
+.message-actions {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.thread-view {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 300px;
+  background: var(--card-bg);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.thread-header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.thread-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.thread-input {
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+</style>
