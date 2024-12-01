@@ -36,6 +36,17 @@ export interface User {
 }
 
 // Card System Types
+export type CardRelationship = 'thread' | 'attachment' | 'reference';
+
+export interface NestedCard {
+  id: string;
+  type: string;
+  relationship: CardRelationship;
+  addedAt: number;
+  addedBy: CardAuthor;
+  position?: number; // For ordering nested cards
+}
+
 export interface BaseCard {
   id: string;
   type: string;
@@ -43,6 +54,11 @@ export interface BaseCard {
   created: number;
   lastUpdated: number;
   createdBy: CardAuthor;
+  parentCard?: {
+    id: string;
+    type: string;
+    relationship: CardRelationship;
+  };
   content: unknown;
   metadata: {
     version: string;
@@ -52,7 +68,7 @@ export interface BaseCard {
       canEdit: ('human' | 'ai' | string)[];
       canDelete: ('human' | 'ai' | string)[];
     };
-    [key: string]: unknown;
+    nestedCards?: NestedCard[];
   };
 }
 
@@ -64,6 +80,8 @@ export interface CardMessage {
   author: CardAuthor;
   type: 'text' | 'command' | 'event' | 'system';
   metadata?: {
+    edited?: boolean;
+    editedAt?: number;
     command?: string;
     args?: unknown[];
     [key: string]: unknown;
@@ -158,6 +176,13 @@ export interface CardOperations {
   deleteCard(cardId: string): Promise<void>;
   getCard(cardId: string): Promise<BaseCard>;
   getCards(): Promise<BaseCard[]>;
+  
+  // Nested card operations
+  attachCard(parentId: string, childId: string, relationship: CardRelationship): Promise<void>;
+  detachCard(parentId: string, childId: string): Promise<void>;
+  moveCard(cardId: string, fromParentId: string, toParentId: string): Promise<void>;
+  reorderCard(parentId: string, cardId: string, newPosition: number): Promise<void>;
+  getNestedCards(cardId: string, relationship?: CardRelationship): Promise<BaseCard[]>;
 }
 
 // Card Development Types
@@ -386,33 +411,15 @@ export interface MessageState {
 
 // Message operations interface
 export interface MessageOperations {
-  sendMessage(content: string, options?: {
-    type?: MessageType;
-    parentId?: string;
-    metadata?: MessageMetadata;
-    attachments?: MessageAttachment[];
-  }): Promise<Message>;
-  
-  editMessage(messageId: string, content: string): Promise<Message>;
-  deleteMessage(messageId: string): Promise<void>;
-  
-  addReaction(messageId: string, emoji: string): Promise<void>;
-  removeReaction(messageId: string, emoji: string): Promise<void>;
-  
-  createThread(parentId: string, content: string): Promise<MessageThread>;
-  replyInThread(threadId: string, content: string): Promise<Message>;
-  
-  getMessages(options?: {
-    limit?: number;
-    before?: number;
-    after?: number;
-    type?: MessageType[];
-    threadId?: string;
-  }): Promise<Message[]>;
-  
-  getThread(threadId: string): Promise<MessageThread>;
-  
-  markAsRead(messageIds: string[]): Promise<void>;
-  pin(messageId: string): Promise<void>;
-  unpin(messageId: string): Promise<void>;
+  addMessage(cardId: string, text: string): Promise<Response>;
+  deleteMessage(cardId: string, messageId: string): Promise<Response>;
+  getMessages(cardId: string): Promise<Response>;
+  editMessage(cardId: string, messageId: string, text: string): Promise<Response>;
+}
+
+export interface MessageCard extends BaseCard {
+  content: {
+    messages: CardMessage[];
+    lastMessageAt?: number;
+  };
 } 

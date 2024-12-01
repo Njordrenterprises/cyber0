@@ -1,81 +1,35 @@
-import { kv } from '../../db/core/kv.ts';
-import type {
-  BaseCard,
-  CardMessage,
-  CardAuthor,
-  KvCardData,
-  KvCardMeta,
-  CardOperations,
-  KvKey,
-  User
+import { 
+  BaseCard, 
+  CardAuthor, 
+  CardRelationship,
+  NestedCard,
+  CardOperations
 } from '../../db/client/types.ts';
-import * as kvBroadcast from '../ws/kvBroadcast.ts';
+import { kv } from '../../db/core/kv.ts';
 
-export abstract class BaseCardRouter implements CardOperations {
+/**
+ * Base router class for handling card operations.
+ * Implements the CardOperations interface for core card functionality.
+ */
+export class BaseCardRouter implements CardOperations {
   protected cardType: string;
-  protected user: User;
+  protected user: CardAuthor;
 
-  constructor(cardType: string, userId: string, author: CardAuthor) {
+  constructor(cardType: string, user: CardAuthor) {
     this.cardType = cardType;
-    this.user = {
-      id: userId,
-      name: author.username,
-      username: author.username,
-      email: '',
-      type: author.type,
-      color: author.color,
-      sprite: author.sprite,
-      created: Date.now(),
-      lastSeen: Date.now(),
-      preferences: {
-        theme: 'dark',
-        language: 'en',
-        notifications: true
-      },
-      capabilities: {
-        canCreateCards: true,
-        canDeleteCards: true,
-        canSendMessages: true,
-        canModifyUsers: false,
-        allowedCardTypes: ['info', 'test']
-      }
-    };
-  }
-
-  protected setUser(user: User) {
     this.user = user;
   }
 
+  /**
+   * Creates a new card with the given name.
+   * @param name The name of the card to create
+   * @returns The created card
+   */
   async createCard(name: string): Promise<BaseCard> {
     const cardId = crypto.randomUUID();
     const now = Date.now();
 
-    const meta: KvCardMeta = {
-      id: cardId,
-      type: this.cardType,
-      name,
-      created: now,
-      lastUpdated: now,
-      createdBy: this.user
-    };
-
-    const data: KvCardData = {
-      messages: [],
-      timestamp: now,
-      lastUpdated: now,
-      meta: {
-        name,
-        type: this.cardType,
-        createdBy: this.user
-      }
-    };
-
-    await Promise.all([
-      kvBroadcast.broadcastSet(['cards', this.cardType, 'meta', cardId], meta),
-      kvBroadcast.broadcastSet(['cards', this.cardType, 'data', cardId], data)
-    ]);
-
-    return {
+    const card: BaseCard = {
       id: cardId,
       name,
       type: this.cardType,
@@ -92,393 +46,512 @@ export abstract class BaseCardRouter implements CardOperations {
         }
       }
     };
+
+    const key = ['cards', this.cardType, 'data', cardId];
+    await kv.set(key, card);
+
+    return card;
   }
 
-  async deleteCard(cardId: string): Promise<void> {
-    const meta = await kv.get<KvCardMeta>(['cards', this.cardType, 'meta', cardId]);
-    if (!meta?.value) throw new Error('not found');
-
-    await Promise.all([
-      kvBroadcast.broadcastDelete(['cards', this.cardType, 'meta', cardId]),
-      kvBroadcast.broadcastDelete(['cards', this.cardType, 'data', cardId])
-    ]);
-  }
-
-  async getCard(cardId: string): Promise<BaseCard> {
-    const meta = await kv.get<KvCardMeta>(['cards', this.cardType, 'meta', cardId]);
-    if (!meta?.value) throw new Error('not found');
-    
-    return {
-      id: meta.value.id,
-      name: meta.value.name,
-      type: meta.value.type,
-      created: meta.value.created,
-      lastUpdated: meta.value.lastUpdated,
-      createdBy: meta.value.createdBy,
-      content: {},
-      metadata: {
-        version: '1.0.0',
-        permissions: {
-          canView: ['human', 'ai'],
-          canEdit: [meta.value.createdBy.id],
-          canDelete: [meta.value.createdBy.id]
-        }
-      }
-    };
-  }
-
-  async getCards(): Promise<BaseCard[]> {
-    const cards: BaseCard[] = [];
-    const iterator = kv.list<KvCardMeta>({ prefix: ['cards', this.cardType, 'meta'] });
-    
-    for await (const entry of iterator) {
-      if (entry.value) {
-        cards.push({
-          id: entry.value.id,
-          name: entry.value.name,
-          type: entry.value.type,
-          created: entry.value.created,
-          lastUpdated: entry.value.lastUpdated,
-          createdBy: entry.value.createdBy,
-          content: {},
-          metadata: {
-            version: '1.0.0',
-            permissions: {
-              canView: ['human', 'ai'],
-              canEdit: [entry.value.createdBy.id],
-              canDelete: [entry.value.createdBy.id]
-            }
-          }
-        });
+  /**
+   * Creates a new card with custom content.
+   * @param data The card data including name and optional content
+   * @returns The created card
+   */
+  protected async createCardWithContent(data: { name: string; content?: unknown }): Promise<BaseCard> {
+    const card = await this.createCard(data.name);
+    if (data.content) {
+      const key = ['cards', this.cardType, 'data', card.id];
+      const entry = await kv.get<BaseCard>(key);
+      if (entry?.value) {
+        const updatedCard = {
+          ...entry.value,
+          content: data.content
+        };
+        await kv.set(key, updatedCard);
+        return updatedCard;
       }
     }
+    return card;
+  }
+
+  /**
+   * Deletes a card by ID.
+   * @param cardId The ID of the card to delete
+   * @throws Error if card not found or permission denied
+   */
+  async deleteCard(cardId: string): Promise<void> {
+    const key = ['cards', this.cardType, 'data', cardId];
+    const entry = await kv.get<BaseCard>(key);
     
+    if (!entry?.value) {
+      throw new Error('Card not found');
+    }
+
+    if (!entry.value.metadata.permissions.canDelete.includes(this.user.id)) {
+      throw new Error('Permission denied');
+    }
+
+    await kv.delete(key);
+  }
+
+  /**
+   * Gets a card by ID.
+   * @param cardId The ID of the card to get
+   * @returns The requested card
+   * @throws Error if card not found or permission denied
+   */
+  async getCard(cardId: string): Promise<BaseCard> {
+    const key = ['cards', this.cardType, 'data', cardId];
+    const entry = await kv.get<BaseCard>(key);
+
+    if (!entry?.value) {
+      throw new Error('Card not found');
+    }
+
+    if (!entry.value.metadata.permissions.canView.includes(this.user.type)) {
+      throw new Error('Permission denied');
+    }
+
+    return entry.value;
+  }
+
+  /**
+   * Gets all cards the user has permission to view.
+   * @returns Array of cards
+   */
+  async getCards(): Promise<BaseCard[]> {
+    const cards: BaseCard[] = [];
+    const iter = kv.list<BaseCard>({ prefix: ['cards', this.cardType, 'data'] });
+
+    for await (const entry of iter) {
+      if (entry.value && entry.value.metadata.permissions.canView.includes(this.user.type)) {
+        cards.push(entry.value);
+      }
+    }
+
     return cards;
   }
 
-  protected async addMessage(cardId: string, text: string): Promise<CardMessage> {
-    const key: KvKey = ['cards', this.cardType, 'data', cardId];
-    const entry = await kv.get<KvCardData>(key);
-    if (!entry?.value) throw new Error('not found');
+  /**
+   * Attaches a card as a nested card to a parent card.
+   * @param parentId The ID of the parent card
+   * @param childId The ID of the child card to attach
+   * @param relationship The type of relationship between the cards
+   * @throws Error if cards not found or permission denied
+   */
+  async attachCard(parentId: string, childId: string, relationship: CardRelationship): Promise<void> {
+    const [parentKey, childKey] = [
+      ['cards', this.cardType, 'data', parentId],
+      ['cards', this.cardType, 'data', childId]
+    ];
 
-    const message: CardMessage = {
-      id: crypto.randomUUID(),
-      cardId,
-      content: text,
-      timestamp: Date.now(),
-      author: this.user,
-      type: 'text'
+    const [parentEntry, childEntry] = await Promise.all([
+      kv.get<BaseCard>(parentKey),
+      kv.get<BaseCard>(childKey)
+    ]);
+
+    if (!parentEntry?.value || !childEntry?.value) {
+      throw new Error('Parent or child card not found');
+    }
+
+    if (!parentEntry.value.metadata.permissions.canEdit.includes(this.user.id)) {
+      throw new Error('Permission denied');
+    }
+
+    const nestedCard: NestedCard = {
+      id: childId,
+      type: childEntry.value.type,
+      relationship,
+      addedAt: Date.now(),
+      addedBy: this.user
     };
 
-    const messages = [...entry.value.messages, message];
-    const now = Date.now();
+    const updatedParent = {
+      ...parentEntry.value,
+      lastUpdated: Date.now(),
+      metadata: {
+        ...parentEntry.value.metadata,
+        nestedCards: [
+          ...(parentEntry.value.metadata.nestedCards || []),
+          nestedCard
+        ]
+      }
+    };
 
-    await kvBroadcast.broadcastSet(key, {
-      ...entry.value,
-      messages,
-      lastUpdated: now
+    const updatedChild = {
+      ...childEntry.value,
+      lastUpdated: Date.now(),
+      parentCard: {
+        id: parentId,
+        type: parentEntry.value.type,
+        relationship
+      }
+    };
+
+    await kv.atomic()
+      .check(parentEntry)
+      .check(childEntry)
+      .set(parentKey, updatedParent)
+      .set(childKey, updatedChild)
+      .commit();
+  }
+
+  /**
+   * Detaches a nested card from its parent.
+   * @param parentId The ID of the parent card
+   * @param childId The ID of the child card to detach
+   * @throws Error if cards not found or permission denied
+   */
+  async detachCard(parentId: string, childId: string): Promise<void> {
+    const [parentKey, childKey] = [
+      ['cards', this.cardType, 'data', parentId],
+      ['cards', this.cardType, 'data', childId]
+    ];
+
+    const [parentEntry, childEntry] = await Promise.all([
+      kv.get<BaseCard>(parentKey),
+      kv.get<BaseCard>(childKey)
+    ]);
+
+    if (!parentEntry?.value || !childEntry?.value) {
+      throw new Error('Parent or child card not found');
+    }
+
+    if (!parentEntry.value.metadata.permissions.canEdit.includes(this.user.id)) {
+      throw new Error('Permission denied');
+    }
+
+    const updatedParent = {
+      ...parentEntry.value,
+      lastUpdated: Date.now(),
+      metadata: {
+        ...parentEntry.value.metadata,
+        nestedCards: parentEntry.value.metadata.nestedCards?.filter(
+          nested => nested.id !== childId
+        ) || []
+      }
+    };
+
+    const updatedChild = {
+      ...childEntry.value,
+      lastUpdated: Date.now(),
+      parentCard: undefined
+    };
+
+    await kv.atomic()
+      .check(parentEntry)
+      .check(childEntry)
+      .set(parentKey, updatedParent)
+      .set(childKey, updatedChild)
+      .commit();
+  }
+
+  /**
+   * Moves a nested card from one parent to another.
+   * @param cardId The ID of the card to move
+   * @param fromParentId The ID of the current parent card
+   * @param toParentId The ID of the new parent card
+   * @throws Error if cards not found or permission denied
+   */
+  async moveCard(cardId: string, fromParentId: string, toParentId: string): Promise<void> {
+    const [cardKey, fromKey, toKey] = [
+      ['cards', this.cardType, 'data', cardId],
+      ['cards', this.cardType, 'data', fromParentId],
+      ['cards', this.cardType, 'data', toParentId]
+    ];
+
+    const [cardEntry, fromEntry, toEntry] = await Promise.all([
+      kv.get<BaseCard>(cardKey),
+      kv.get<BaseCard>(fromKey),
+      kv.get<BaseCard>(toKey)
+    ]);
+
+    if (!cardEntry?.value || !fromEntry?.value || !toEntry?.value) {
+      throw new Error('One or more cards not found');
+    }
+
+    if (!fromEntry.value.metadata.permissions.canEdit.includes(this.user.id) ||
+        !toEntry.value.metadata.permissions.canEdit.includes(this.user.id)) {
+      throw new Error('Permission denied');
+    }
+
+    const nestedCard = fromEntry.value.metadata.nestedCards?.find(
+      nested => nested.id === cardId
+    );
+
+    if (!nestedCard) {
+      throw new Error('Card is not nested in the source parent');
+    }
+
+    const updatedFrom = {
+      ...fromEntry.value,
+      lastUpdated: Date.now(),
+      metadata: {
+        ...fromEntry.value.metadata,
+        nestedCards: fromEntry.value.metadata.nestedCards?.filter(
+          nested => nested.id !== cardId
+        ) || []
+      }
+    };
+
+    const updatedTo = {
+      ...toEntry.value,
+      lastUpdated: Date.now(),
+      metadata: {
+        ...toEntry.value.metadata,
+        nestedCards: [
+          ...(toEntry.value.metadata.nestedCards || []),
+          {
+            ...nestedCard,
+            addedAt: Date.now(),
+            addedBy: this.user
+          }
+        ]
+      }
+    };
+
+    const updatedCard = {
+      ...cardEntry.value,
+      lastUpdated: Date.now(),
+      parentCard: {
+        id: toParentId,
+        type: toEntry.value.type,
+        relationship: nestedCard.relationship
+      }
+    };
+
+    await kv.atomic()
+      .check(cardEntry)
+      .check(fromEntry)
+      .check(toEntry)
+      .set(cardKey, updatedCard)
+      .set(fromKey, updatedFrom)
+      .set(toKey, updatedTo)
+      .commit();
+  }
+
+  /**
+   * Reorders a nested card within its parent's nested cards list.
+   * @param parentId The ID of the parent card
+   * @param cardId The ID of the card to reorder
+   * @param newPosition The new position index for the card
+   * @throws Error if cards not found or permission denied
+   */
+  async reorderCard(parentId: string, cardId: string, newPosition: number): Promise<void> {
+    const parentKey = ['cards', this.cardType, 'data', parentId];
+    const parentEntry = await kv.get<BaseCard>(parentKey);
+
+    if (!parentEntry?.value) {
+      throw new Error('Parent card not found');
+    }
+
+    if (!parentEntry.value.metadata.permissions.canEdit.includes(this.user.id)) {
+      throw new Error('Permission denied');
+    }
+
+    const nestedCards = parentEntry.value.metadata.nestedCards || [];
+    const cardIndex = nestedCards.findIndex(nested => nested.id === cardId);
+
+    if (cardIndex === -1) {
+      throw new Error('Card is not nested in the parent');
+    }
+
+    // Remove card from current position
+    const [removedCard] = nestedCards.splice(cardIndex, 1);
+    // Insert at new position
+    nestedCards.splice(newPosition, 0, {
+      ...removedCard,
+      position: newPosition
     });
 
-    return message;
+    // Update positions for all cards
+    const updatedNestedCards = nestedCards.map((nested, index) => ({
+      ...nested,
+      position: index
+    }));
+
+    const updatedParent = {
+      ...parentEntry.value,
+      lastUpdated: Date.now(),
+      metadata: {
+        ...parentEntry.value.metadata,
+        nestedCards: updatedNestedCards
+      }
+    };
+
+    await kv.atomic()
+      .check(parentEntry)
+      .set(parentKey, updatedParent)
+      .commit();
   }
 
-  protected async deleteMessage(cardId: string, messageId: string): Promise<void> {
-    const key: KvKey = ['cards', this.cardType, 'data', cardId];
-    const entry = await kv.get<KvCardData>(key);
-    if (!entry?.value) throw new Error('not found');
+  /**
+   * Gets all nested cards for a given card, optionally filtered by relationship type.
+   * @param cardId The ID of the parent card
+   * @param relationship Optional relationship type to filter by
+   * @returns Array of nested cards
+   * @throws Error if card not found
+   */
+  async getNestedCards(cardId: string, relationship?: CardRelationship): Promise<BaseCard[]> {
+    const key = ['cards', this.cardType, 'data', cardId];
+    const entry = await kv.get<BaseCard>(key);
 
-    const messages = entry.value.messages.filter((m: CardMessage) => m.id !== messageId);
-    const now = Date.now();
-
-    await kvBroadcast.broadcastSet(key, {
-      ...entry.value,
-      messages,
-      lastUpdated: now
-    });
-  }
-
-  // Request Handling
-  handleRequest(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
-
-    // Handle base routes
-    switch (path) {
-      case 'list':
-        return this.handleList();
-      case 'create':
-        return this.handleCreate(req);
+    if (!entry?.value) {
+      throw new Error('Card not found');
     }
 
-    // Handle direct card operations
-    const cardId = path;
-    if (cardId && !cardId.includes('/')) {
-      switch (req.method) {
-        case 'GET':
-          return this.handleGet(cardId);
-        case 'PUT':
-          return this.handleUpdate(cardId, req);
-        case 'DELETE':
-          return this.handleCardDelete(cardId);
-      }
-    }
+    const nestedCards = entry.value.metadata.nestedCards || [];
+    const filteredCards = relationship 
+      ? nestedCards.filter(nested => nested.relationship === relationship)
+      : nestedCards;
 
-    // Handle API endpoints
-    if (path.startsWith('api')) {
-      const subPath = path.replace('api/', '');
-      
-      if (subPath === 'messages' && req.method === 'GET') {
-        return this.handleMessagesList(req);
-      }
+    // Load all nested cards
+    const cards = await Promise.all(
+      filteredCards.map(async nested => {
+        const cardKey = ['cards', nested.type, 'data', nested.id];
+        const cardEntry = await kv.get<BaseCard>(cardKey);
+        return cardEntry?.value;
+      })
+    );
 
-      switch (req.method) {
-        case 'GET':
-          return this.handleApiGet(req);
-        case 'POST':
-          return this.handleMessageAdd(req);
-        case 'DELETE':
-          return this.handleMessageDelete(req);
-        default:
-          return Promise.resolve(new Response('Method not allowed', { status: 405 }));
-      }
-    }
-
-    return Promise.resolve(new Response('Not Found', { status: 404 }));
-  }
-
-  protected async handleList(): Promise<Response> {
-    const cards = await this.getCards();
-    return new Response(JSON.stringify(cards), {
-      status: 200,
-      headers: { 'content-type': 'application/json' }
-    });
-  }
-
-  protected async handleCreate(req: Request): Promise<Response> {
-    try {
-      const data = await req.json();
-      if (!data.name) {
-        return new Response(JSON.stringify({ error: 'Name is required' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-
-      const card = await this.createCard(data.name);
-      return new Response(JSON.stringify(card), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
+    return cards.filter((card): card is BaseCard => card !== undefined)
+      .sort((a, b) => {
+        const posA = nestedCards.find(n => n.id === a.id)?.position || 0;
+        const posB = nestedCards.find(n => n.id === b.id)?.position || 0;
+        return posA - posB;
       });
-    } catch (error) {
-      console.error('Error creating card:', error);
-      if (error instanceof Error && error.message.includes('invalid json')) {
-        return new Response(JSON.stringify({ error: 'Invalid JSON in request' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-      return new Response(JSON.stringify({ error: 'Failed to create card' }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' }
-      });
-    }
   }
 
-  protected async handleGet(cardId: string): Promise<Response> {
-    try {
-      const card = await this.getCard(cardId);
-      return new Response(JSON.stringify(card), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message === 'not found') {
-        return new Response('Not Found', { status: 404 });
-      }
-      console.error('Error getting card:', error);
-      return new Response('Internal Server Error', { status: 500 });
-    }
-  }
-
-  protected async handleUpdate(cardId: string, req: Request): Promise<Response> {
-    try {
-      const data = await req.json();
-      const card = await this.getCard(cardId);
-      
-      // Update card data
-      const key: KvKey = ['cards', this.cardType, 'data', cardId];
-      const entry = await kv.get<KvCardData>(key);
-      if (!entry?.value) {
-        return new Response('Not Found', { status: 404 });
-      }
-
-      const updatedData = {
-        ...entry.value,
-        content: data.content,
-        lastUpdated: Date.now()
-      };
-
-      await kvBroadcast.broadcastSet(key, updatedData);
-
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error updating card:', error);
-      return new Response('Internal Server Error', { status: 500 });
-    }
-  }
-
-  protected async handleCardDelete(cardId: string): Promise<Response> {
-    try {
-      await this.deleteCard(cardId);
-      return new Response(JSON.stringify({ success: true }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message === 'not found') {
-        return new Response('Not Found', { status: 404 });
-      }
-      console.error('Error deleting card:', error);
-      return new Response('Internal Server Error', { status: 500 });
-    }
-  }
-
-  protected async handleApiGet(req: Request): Promise<Response> {
+  /**
+   * Handles HTTP requests for card operations.
+   * @param req The incoming HTTP request
+   * @returns HTTP response
+   */
+  async handleRequest(req: Request): Promise<Response> {
     try {
       const url = new URL(req.url);
-      const cardId = url.searchParams.get('cardId');
-      if (!cardId) {
-        return new Response(JSON.stringify({ error: 'Card ID is required' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
+      const path = url.pathname.replace(`/cards/${this.cardType}/`, '');
+
+      // Handle nested card operations
+      if (path.startsWith('nested/')) {
+        return await this.handleNestedOperation(req);
       }
 
-      try {
-        const card = await this.getCard(cardId);
-        return new Response(JSON.stringify(card), {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
+      // Handle core operations
+      return await this.handleCoreOperation(req, path);
+    } catch (error) {
+      return this.handleError(error);
+    }
+  }
+
+  /**
+   * Handles nested card operations.
+   * @param req The incoming HTTP request
+   * @returns HTTP response
+   */
+  protected async handleNestedOperation(req: Request): Promise<Response> {
+    const path = new URL(req.url).pathname;
+    const operation = path.split('/').pop();
+    const data = await req.json();
+
+    switch (operation) {
+      case 'attach':
+        await this.attachCard(data.parentId, data.childId, data.relationship);
+        break;
+      case 'detach':
+        await this.detachCard(data.parentId, data.childId);
+        break;
+      case 'move':
+        await this.moveCard(data.cardId, data.fromParentId, data.toParentId);
+        break;
+      case 'reorder':
+        await this.reorderCard(data.parentId, data.cardId, data.newPosition);
+        break;
+      default:
+        return new Response(JSON.stringify({ error: 'Invalid operation' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
         });
-      } catch (error) {
-        if (error instanceof Error && error.message === 'not found') {
-          return new Response(JSON.stringify({ error: 'Card not found' }), {
-            status: 404,
-            headers: { 'content-type': 'application/json' }
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Handles core card operations.
+   * @param req The incoming HTTP request
+   * @param path The request path
+   * @returns HTTP response
+   */
+  protected async handleCoreOperation(req: Request, path: string): Promise<Response> {
+    switch (req.method) {
+      case 'GET':
+        if (path === '') {
+          const cards = await this.getCards();
+          return new Response(JSON.stringify(cards), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          const card = await this.getCard(path);
+          return new Response(JSON.stringify(card), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
           });
         }
-        throw error;
-      }
-    } catch (error) {
-      console.error('Error getting card:', error);
-      return new Response(JSON.stringify({ error: 'Failed to get card' }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' }
-      });
-    }
-  }
-
-  protected async handleMessagesList(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    const cardId = url.searchParams.get('cardId');
-    if (!cardId) {
-      return new Response(JSON.stringify({ error: 'Card ID is required' }), {
-        status: 400,
-        headers: { 'content-type': 'application/json' }
-      });
-    }
-
-    try {
-      const key: KvKey = ['cards', this.cardType, 'data', cardId];
-      const entry = await kv.get<KvCardData>(key);
-      if (!entry?.value) {
-        return new Response(JSON.stringify({ error: 'Card not found' }), {
-          status: 404,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-
-      return new Response(JSON.stringify(entry.value.messages || []), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      });
-    } catch (error) {
-      console.error('Error listing messages:', error);
-      return new Response(JSON.stringify({ error: 'Failed to list messages' }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' }
-      });
-    }
-  }
-
-  protected async handleMessageAdd(req: Request): Promise<Response> {
-    try {
-      const data = await req.json();
-      if (!data.cardId || !data.text) {
-        return new Response(JSON.stringify({ error: 'Card ID and text are required' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-
-      try {
-        const message = await this.addMessage(data.cardId, data.text);
-        return new Response(JSON.stringify(message), {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
-        });
-      } catch (error) {
-        if (error instanceof Error && error.message === 'not found') {
-          return new Response(JSON.stringify({ error: 'Card not found' }), {
-            status: 404,
-            headers: { 'content-type': 'application/json' }
+      case 'POST':
+        if (path === '') {
+          const data = await req.json();
+          const card = await this.createCardWithContent(data);
+          return new Response(JSON.stringify(card), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
           });
         }
-        throw error;
-      }
-    } catch (error) {
-      console.error('Error adding message:', error);
-      return new Response(JSON.stringify({ error: 'Failed to add message' }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' }
-      });
-    }
-  }
-
-  protected async handleMessageDelete(req: Request): Promise<Response> {
-    try {
-      const data = await req.json();
-      if (!data.cardId || !data.messageId) {
-        return new Response(JSON.stringify({ error: 'Card ID and message ID are required' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-
-      try {
-        await this.deleteMessage(data.cardId, data.messageId);
+        break;
+      case 'DELETE':
+        await this.deleteCard(path);
         return new Response(JSON.stringify({ success: true }), {
           status: 200,
-          headers: { 'content-type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' }
         });
-      } catch (error) {
-        if (error instanceof Error && error.message === 'not found') {
-          return new Response(JSON.stringify({ error: 'Card or message not found' }), {
-            status: 404,
-            headers: { 'content-type': 'application/json' }
-          });
-        }
-        throw error;
-      }
-    } catch (error) {
-      console.error('Error deleting message:', error);
-      return new Response(JSON.stringify({ error: 'Failed to delete message' }), {
-        status: 500,
-        headers: { 'content-type': 'application/json' }
+      default:
+        return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+          status: 405,
+          headers: { 'Content-Type': 'application/json' }
+        });
+    }
+
+    return new Response(JSON.stringify({ error: 'Not found' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  /**
+   * Handles errors and converts them to appropriate HTTP responses.
+   * @param error The error to handle
+   * @returns HTTP response
+   */
+  protected handleError(error: unknown): Response {
+    console.error('Error handling request:', error);
+    
+    if (error instanceof Error) {
+      const status = error.message.includes('not found') ? 404 :
+                    error.message.includes('denied') ? 403 : 500;
+      return new Response(JSON.stringify({ error: error.message }), {
+        status,
+        headers: { 'Content-Type': 'application/json' }
       });
     }
+
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 
